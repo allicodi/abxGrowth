@@ -1,0 +1,15 @@
+Package: aggcomp
+Type: Package
+Title: Antibiotics Growth G-computation 
+Version: 0.1.0
+Author: Allison Codi
+Maintainer: Allison Codi <allison.codi@emory.edu>
+Description: This package implements traditional and longitudinal g-computation to measure the effect of antibiotics on growth. The package is applied in a meta-analysis of studies that measure growth outcomes for children with shigellosis.
+License: MIT + file LICENSE
+Depends: R (>= 3.0.0)
+Imports: 
+  splines,
+  stats
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
