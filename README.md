@@ -6,7 +6,7 @@
 
 ## Description
 
-`aggcomp` is a package that implements traditional and longitudinal g-computation to estimate the effect of infection on growth outcomes in subgroups of patients that did and did not receive antibiotics. 
+aggcomp is an R package that implements both traditional and longitudinal g-computation methods to estimate the impact of infection on growth outcomes, stratified by subgroups of patients who did or did not receive antibiotics.
 
 ADDITIONAL DETAILS COMING SOON
 
