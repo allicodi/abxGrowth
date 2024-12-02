@@ -3,4 +3,7 @@
 S3method(print,aggcomp_res)
 export(abx_growth_gcomp)
 export(aggcomp)
+import(ggplot2)
+import(gtsummary)
 import(splines)
+import(table1)

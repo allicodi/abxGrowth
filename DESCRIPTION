@@ -9,7 +9,10 @@ License: MIT + file LICENSE
 Depends: R (>= 3.0.0)
 Imports: 
   splines,
-  stats
+  stats,
+  ggplot2,
+  gtsummary,
+  table1
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
