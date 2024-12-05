@@ -61,8 +61,12 @@ abx_growth_gcomp <- function(data,
     if(site_interaction == "TRUE"){
       
       # if site in covariate list, remove for model1 (only want interaction terms)
-      if(site_var_name %in% covariate_list){
-        covariate_list <- covariate_list[covariate_list != site_var_name]
+      if(length(site_var_name) == 1){
+        if(site_var_name %in% covariate_list){
+          covariate_list <- covariate_list[covariate_list != site_var_name]
+        }
+      } else if (any(site_var_name %in% covariate_list)){
+        covariate_list <- covariate_list[!covariate_list %in% site_var_name]
       }
       
       model_1_formula <- stats::as.formula(paste(laz_var_name, "~", 

@@ -114,9 +114,12 @@ combine_res <- function(res_list) {
 #' @param infection_var_name name of binary infection variable
 #' @param site_var_name name of site variable in dataset
 #' @param site_interaction TRUE or FALSE indicating interaction between site and antibiotics 
-#' @param age_name name of age covariate in dataset (if applicable to add spline, else NULL)
+#' @param age_var_name name of age covariate in dataset (if applicable to add spline, else NULL)
 #' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation
 #' @param covariate_list character vector containing names of baseline covariates
+#' @param id_var_name name of ID variable in dataset
+#' 
+#' @import fastDummies
 #' 
 #' @returns dataset with factors one-hot encoded
 one_hot_encode <- function(data, 
@@ -125,30 +128,33 @@ one_hot_encode <- function(data,
                            infection_var_name,
                            site_var_name,
                            site_interaction,
-                           age_name,
+                           age_var_name,
                            covariate_list, 
-                           severity_list){
+                           severity_list,
+                           id_var_name = "pid"){
   
-  ### "One hot encode" factors in dataset
+  # Apply one-hot encoding to the relevant columns
+  one_hot_data <- fastDummies::dummy_cols(data,
+                                          select_columns = colnames(data)[
+                                            !(colnames(data) %in% c(id_var_name, "child_id")) &
+                                              (sapply(data, is.character) | sapply(data, is.factor))
+                                          ],
+                                          remove_first_dummy = FALSE,
+                                          remove_selected_columns = TRUE,
+                                          ignore_na = TRUE)
   
-  # outcome var has missing data, remove that and add back on after to avoid losing rows in data
-  outcome <- data[[laz_var_name]]
-  tmp_data <- data[,colnames(data) != laz_var_name]
-  
-  # set contrasts.arg for factors so all levels are included vs losing one to reference (causes issues if trying to stratify by reference variable)
-  contrasts.arg.all <- lapply(tmp_data[, sapply(tmp_data, is.factor), drop = FALSE], stats::contrasts, contrasts = FALSE)
-  
-  # get one hot encoded full data
-  one_hot_data <- data.frame(stats::model.matrix(~ . -1, data = tmp_data, contrasts.arg = contrasts.arg.all))
-  
-  # add outcome var back
-  one_hot_data[[laz_var_name]] <- outcome
+  # Remove spaces from column names in the one-hot encoded data
+  colnames(one_hot_data) <- gsub(" ", "_", colnames(one_hot_data))
   
   ### Get new column names for covariates (covariate_list will have changed if any are factors)
-  
   covariate_data <- data[,covariate_list, drop = FALSE]
   if(any(sapply(covariate_data, is.factor) == TRUE)){
-    one_hot_covariate_colnames <- colnames(data.frame(stats::model.matrix(~ . - 1, data = covariate_data, contrasts.arg = contrasts.arg.all)))
+    one_hot_covariate_data <- fastDummies::dummy_cols(covariate_data,
+                                                      remove_first_dummy = FALSE,
+                                                      remove_selected_columns = TRUE,
+                                                      ignore_na = TRUE)
+    colnames(one_hot_covariate_data) <- gsub(" ", "_", colnames(one_hot_covariate_data)) # remove spaces here as well
+    one_hot_covariate_colnames <- colnames(one_hot_covariate_data)
   } else {
     one_hot_covariate_colnames <- colnames(covariate_data)
   }
@@ -156,14 +162,25 @@ one_hot_encode <- function(data,
   ### Get new column names for severity variables
   severity_data <- data[,severity_list, drop = FALSE]
   if(any(sapply(severity_data, is.factor) == TRUE)){
-    one_hot_severity_colnames <- colnames(data.frame(stats::model.matrix(~ . - 1, data = severity_data, contrasts.arg = contrasts.arg.all)))
+    one_hot_severity_data <- fastDummies::dummy_cols(severity_data,
+                                                     remove_first_dummy = FALSE,
+                                                     remove_selected_columns = TRUE,
+                                                     ignore_na = TRUE)
+    colnames(one_hot_severity_data) <- gsub(" ", "_", colnames(one_hot_severity_data)) # remove spaces here as well
+    one_hot_severity_colnames <- colnames(one_hot_severity_data)
   } else {
     one_hot_severity_colnames <- colnames(severity_data)
   }
   
   # If there is an interaction with site, get site names in one-hot encoded data to be used later to add interaction term
   if(site_interaction == "TRUE"){
-    one_hot_enroll_site_colnames <- colnames(data.frame(stats::model.matrix(~ . - 1, data = data[,site_var_name, drop = FALSE])))
+    site_data <- data[,site_var_name, drop = FALSE]
+    one_hot_site_data <- fastDummies::dummy_cols(site_data,
+                                                 remove_first_dummy = FALSE,
+                                                 remove_selected_columns = TRUE,
+                                                 ignore_na = TRUE)
+    colnames(one_hot_site_data) <- gsub(" ", "_", colnames(one_hot_site_data)) # remove spaces here as well
+    one_hot_enroll_site_colnames <- colnames(one_hot_site_data)
   } else {
     one_hot_enroll_site_colnames <- NULL
   }
@@ -172,8 +189,8 @@ one_hot_encode <- function(data,
               covariate_list = one_hot_covariate_colnames,
               severity_list = one_hot_severity_colnames,
               site_var_names = one_hot_enroll_site_colnames))
-  
 }
+
 
 #' Function to make and print descriptive tables to aid in interpreting gcomp
 #' 
@@ -189,6 +206,8 @@ one_hot_encode <- function(data,
 #' 
 #' @import gtsummary
 #' @import table1
+#' @import dplyr
+#' @import labelled
 #' 
 #' @returns list of descriptive tables
 make_tables <- function(data,
@@ -252,19 +271,19 @@ make_tables <- function(data,
                           data = data, 
                           family = "gaussian")
     
-    caption <- paste0("Summary of model for ", var_label(model_1$y), " ~ ", var_label(data[abx_var_name]), 
-                      " + \n\n ", var_label(data[infection_var_name]), " + Severity Covariates + Baseline Covariates")
+    caption <- paste0("Summary of model for ", labelled::var_label(model_1$y), " ~ ", labelled::var_label(data[abx_var_name]), 
+                      " + \n\n ", labelled::var_label(data[infection_var_name]), " + Severity Covariates + Baseline Covariates")
     
     
     # Summary of logistic regression of abx ~ shigella + severity + BL covariates
-    abx_logistic <- glm(as.formula(paste(abx_var_name, "~", 
+    abx_logistic <- stats::glm(stats::as.formula(paste(abx_var_name, "~", 
                                          infection_var_name, "+",
                                          paste(covariate_list, collapse = "+"), "+", 
                                          paste(severity_list, collapse = "+"))),
                         data = data,
                         family = "binomial")
     
-    caption2 <- paste0("Summary of model for ", var_label(abx_logistic$y), " ~ ", var_label(data[infection_var_name]), 
+    caption2 <- paste0("Summary of model for ", labelled::var_label(abx_logistic$y), " ~ ", labelled::var_label(data[infection_var_name]), 
                        " + Severity Covariates + Baseline Covariates")
     
     
@@ -291,17 +310,17 @@ make_tables <- function(data,
                           data = data,
                           family = "gaussian")
     
-    caption <- paste0("Summary of model for ", var_label(model_1$y), " ~ ", var_label(data[abx_var_name]), 
-                      " + \n\n ", var_label(data[infection_var_name]), " + Baseline Covariates")
+    caption <- paste0("Summary of model for ", labelled::var_label(model_1$y), " ~ ", labelled::var_label(data[abx_var_name]), 
+                      " + \n\n ", labelled::var_label(data[infection_var_name]), " + Baseline Covariates")
     
     # Summary of logistic regression of abx ~ shigella + severity + BL covariates
-    abx_logistic <- glm(as.formula(paste(abx_var_name, "~", 
+    abx_logistic <- stats::glm(stats::as.formula(paste(abx_var_name, "~", 
                                          infection_var_name, "+",
                                          paste(covariate_list, collapse = "+"))),
                         data = data,
                         family = "binomial")
     
-    caption2 <- paste0("Summary of model for ", var_label(abx_logistic$y), " ~ ", var_label(data[infection_var_name]), 
+    caption2 <- paste0("Summary of model for ", labelled::var_label(abx_logistic$y), " ~ ", labelled::var_label(data[infection_var_name]), 
                        " + Baseline Covariates")
   }
     
@@ -317,12 +336,12 @@ make_tables <- function(data,
     modify_caption(caption2)
   
   # Summary of logistic regression of shigella ~ BL covariates
-  shig_bl_logistic <- glm(as.formula(paste(infection_var_name, "~",
+  shig_bl_logistic <- stats::glm(stats::as.formula(paste(infection_var_name, "~",
                                            paste(covariate_list, collapse = "+"))),
                           data = data,
                           family = "binomial")
   
-  caption3 <- paste0("Summary of model for ", var_label(shig_bl_logistic$y), " ~ Baseline Covariates")
+  caption3 <- paste0("Summary of model for ", labelled::var_label(shig_bl_logistic$y), " ~ Baseline Covariates")
   
   tbl_3 <- shig_bl_logistic %>% 
     tbl_regression(exponentiate = TRUE,
@@ -337,13 +356,13 @@ make_tables <- function(data,
     
     for(i in 1:length(severity_list)){
       if(is.factor(data[,severity_list[i]])){
-        severity_fit <- glm(as.formula(paste(severity_list[i], "~", 
+        severity_fit <- stats::glm(stats::as.formula(paste(severity_list[i], "~", 
                                              infection_var_name, "+",
                                              paste(covariate_list, collapse = "+"))),
                             data = data,
                             family = "binomial")
    
-        caption4 <- paste0("Summary of model for ", var_label(data[severity_list[i]]), " ~ \n\n ", var_label(data[infection_var_name]), " + Baseline Covariates")
+        caption4 <- paste0("Summary of model for ", labelled::var_label(data[severity_list[i]]), " ~ \n\n ", labelled::var_label(data[infection_var_name]), " + Baseline Covariates")
         
         
         severity_tbls[[i]] <- severity_fit %>%
@@ -353,14 +372,14 @@ make_tables <- function(data,
           modify_caption(caption4)
         
       } else{
-        severity_fit <- glm(as.formula(paste(severity_list[i], "~", 
+        severity_fit <- stats::glm(stats::as.formula(paste(severity_list[i], "~", 
                                              infection_var_name, "+",
                                              paste(covariate_list, collapse = "+"))),
                             data = data,
                             family = "gaussian")
         
         
-        caption4 <- paste0("Summary of model for ", var_label(data[severity_list[i]]), " ~ \n\n", var_label(data[infection_var_name]), " + Baseline Covariates")
+        caption4 <- paste0("Summary of model for ", labelled::var_label(data[severity_list[i]]), " ~ \n\n", labelled::var_label(data[infection_var_name]), " + Baseline Covariates")
         
         
         severity_tbls[[i]] <- severity_fit %>%
@@ -373,14 +392,14 @@ make_tables <- function(data,
     
     # Descriptive statistics of severity measures and baseline covariates by shigella status
     # Relabel the grouping variable
-    name_shig <- var_label(data[[infection_var_name]])
+    name_shig <- labelled::var_label(data[[infection_var_name]])
     data[[infection_var_name]] <- factor(data[[infection_var_name]],
                                         levels = c(0, 1),
                                         labels = c("No Shigella", "Shigella"))
     
     # Helper function for table1
     my.render.cont <- function(x) {
-      stats <- quantile(x, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
+      stats <- stats::quantile(x, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
       sprintf("%s (%s, %s)", round(stats[2], 2), round(stats[1], 2), round(stats[3], 2))
     }
     
@@ -389,9 +408,9 @@ make_tables <- function(data,
    
     # if missing any infection_var_name, drop
     data <- data %>%
-      filter(!is.na(.[[infection_var_name]]))
+      dplyr::filter(!is.na(.[[infection_var_name]]))
     
-    descriptive_tbl <- table1(as.formula(paste("~", paste(severity_list, collapse = "+"), "+",
+    descriptive_tbl <- table1(stats::as.formula(paste("~", paste(severity_list, collapse = "+"), "+",
                                                paste(covariate_list, collapse = "+"), 
                                                "|" , infection_var_name)),
                               data = data,
@@ -406,14 +425,14 @@ make_tables <- function(data,
     
     # Descriptive statistics of severity measures and baseline covariates by shigella status
     # Relabel the grouping variable
-    name_shig <- var_label(data[[infection_var_name]])
+    name_shig <- labelled::var_label(data[[infection_var_name]])
     data[[infection_var_name]] <- factor(data[[infection_var_name]],
                                         levels = c(0, 1),
                                         labels = c("No Shigella", "Shigella"))
     
     # Helper function for table1
     my.render.cont <- function(x) {
-      stats <- quantile(x, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
+      stats <- stats::quantile(x, probs = c(0.25, 0.5, 0.75), na.rm = TRUE)
       sprintf("%s (%s, %s)", round(stats[2], 2), round(stats[1], 2), round(stats[3], 2))
     }
     
@@ -421,9 +440,9 @@ make_tables <- function(data,
     
     # if missing any infection_var_name, drop
     data <- data %>%
-      filter(!is.na(.[[infection_var_name]]))
+      dplyr::filter(!is.na(.[[infection_var_name]]))
     
-    descriptive_tbl <- table1(as.formula(paste("~", paste(covariate_list, collapse = "+"), 
+    descriptive_tbl <- table1(stats::as.formula(paste("~", paste(covariate_list, collapse = "+"), 
                                                "|" , infection_var_name)),
                               data = data,
                               render.continuous = my.render.cont,
@@ -469,7 +488,7 @@ plot_cis <- function(results){
     
     x_loc <- max(plot_data$upper_ci) + 0.01
     
-    ggplot(data = plot_data, aes(x = pt_est, y = subgroup, color = subgroup)) +
+    ggplot2::ggplot(data = plot_data, aes(x = pt_est, y = subgroup, color = subgroup)) +
       geom_point(size = 5) +  # Increase point size
       geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci), height = 0.3) +  # Increase error bar width
       geom_vline(xintercept = 0, linetype = "dashed", color = "red") +

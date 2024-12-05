@@ -11,9 +11,10 @@ one_hot_encode(
   infection_var_name,
   site_var_name,
   site_interaction,
-  age_name,
+  age_var_name,
   covariate_list,
-  severity_list
+  severity_list,
+  id_var_name = "pid"
 )
 }
 \arguments{
@@ -29,11 +30,13 @@ one_hot_encode(
 
 \item{site_interaction}{TRUE or FALSE indicating interaction between site and antibiotics}
 
-\item{age_name}{name of age covariate in dataset (if applicable to add spline, else NULL)}
+\item{age_var_name}{name of age covariate in dataset (if applicable to add spline, else NULL)}
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 
 \item{severity_list}{character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation}
+
+\item{id_var_name}{name of ID variable in dataset}
 }
 \value{
 dataset with factors one-hot encoded
