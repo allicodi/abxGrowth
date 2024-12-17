@@ -461,20 +461,46 @@ make_tables <- function(data,
 #' Function to make confidence interval plots of results
 #' 
 #' @param results `aggcomp_res` object or list of `aggcomp_res` objects
+#' @param abx_label label or list of labels to use for antibiotics variable (same length as results list)
+#' @param inf_label label or list of labels to use for infection variable (same length as results list)
+#' @param outcome_label label or list of labels to use for outcome variable (same length as results list)
 #' 
 #' @import ggplot2
 #' 
 #' @return list of confidence interval ggplots
-plot_cis <- function(results){
+plot_cis <- function(results, 
+                     abx_labels = NULL,
+                     inf_labels = NULL, 
+                     outcome_labels = NULL){
   
   # if single object, put into list for lapply
   if(!is(results, "list")){
     results <- list(results)
   }
   
-  plot_results <- lapply(results, function(res){
+  plot_results <- lapply(1:length(results), function(i){
     
-    plot_label <- paste0("Antibiotics: ", res$parameters$abx_var_name, ", Infection: ", res$parameters$infection_var_name) 
+    res <- results[[i]]
+    
+    if(is.null(abx_labels)){
+      abx_label <- res$parameters$abx_var_name
+    } else {
+      abx_label <- abx_labels[[i]]
+    }
+    
+    if(is.null(inf_labels)) {
+      inf_label <- res$parameters$infection_var_name
+    } else{
+      inf_label <- inf_labels[[i]]
+    }
+    
+    if(is.null(outcome_labels)) { 
+      outcome_label <- res$parameters$laz_var_name
+    } else {
+      outcome_label <- outcome_labels[[i]]
+    }
+    
+    plot_label <- paste0("Antibiotics: ", abx_label, ", Infection: ", inf_label) 
     
     # make dataframe for plotting
     results_vec <- res$results
@@ -494,19 +520,117 @@ plot_cis <- function(results){
       geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
       geom_text(aes(x = x_loc , label = paste0("Point estimate: ", round(pt_est, 4), "\n95% CI: [", round(lower_ci, 4), ", ", round(upper_ci, 4), "]")), 
                 hjust = 0, vjust = 0.5, size = 5) +  # Increase text size
-      labs(title = paste0("Estimated effect of infection on ", res$parameters$laz_var_name),
+      labs(title = paste0("Estimated effect of ", inf_label, " infection on ", outcome_label),
            x = "Estimated effect", y = "Treatment subgroup") +
       theme_minimal(base_size = 14) +  # Increase base font size for all text
       facet_wrap(~ label, scales = "free_y", ncol = 1) +
       labs(color = "Treatment subgroup") +
       theme(
-        strip.text = element_text(size = 14),  # Increase facet label size
-        axis.title = element_text(size = 16),  # Increase axis titles
-        axis.text = element_text(size = 12),  # Increase axis text size
-        plot.title = element_text(size = 18)  # Increase plot title size
+        strip.text = element_text(size = 16),  # Increase facet label size
+        axis.title = element_text(size = 18),  # Increase axis titles
+        axis.text = element_text(size = 14),  # Increase axis text size
+        plot.title = element_text(size = 20)  # Increase plot title size
       ) +
       coord_cartesian(clip = "off")  # Prevent clipping of text labels
   })
   
   return(plot_results)
+}
+
+
+#' Function to make confidence interval plots of results with multiple subplots
+#' 
+#' @param results `aggcomp_res` object or list of `aggcomp_res` objects
+#' @param abx_labels label or list of labels to use for antibiotics variable (same length as results list)
+#' @param inf_labels label or list of labels to use for infection variable (same length as results list)
+#' @param outcome_labels label or list of labels to use for outcome variable (same length as results list)
+#' 
+#' @import ggplot2
+#' 
+#' @return list of confidence interval ggplots
+plot_cis_subplots <- function(results, 
+                     abx_labels = NULL,
+                     inf_labels = NULL, 
+                     outcome_labels = NULL) {
+  
+  # if single object, put into list for lapply
+  if (!is(results, "list")) {
+    results <- list(results)
+  }
+  
+  # Determine the global x-axis limits
+  x_lims <- lapply(results, function(res) {
+    results_vec <- res$results
+    range(c(results_vec['lower_ci_abx'], results_vec['upper_ci_abx'],
+            results_vec['lower_ci_no_abx'], results_vec['upper_ci_no_abx']))
+  })
+  global_x_min <- min(sapply(x_lims, `[`, 1))
+  global_x_max <- max(sapply(x_lims, `[`, 2))
+  
+  # Add padding for annotations
+  annotation_padding <- (global_x_max - global_x_min) * 0.5
+  global_x_max <- global_x_max + annotation_padding
+  
+  # Generate individual plots
+  plot_results <- lapply(1:length(results), function(i) {
+    res <- results[[i]]
+    
+    if (is.null(abx_labels)) {
+      abx_label <- res$parameters$abx_var_name
+    } else {
+      abx_label <- abx_labels[[i]]
+    }
+    
+    if (is.null(inf_labels)) {
+      inf_label <- res$parameters$infection_var_name
+    } else {
+      inf_label <- inf_labels[[i]]
+    }
+    
+    if (is.null(outcome_labels)) { 
+      outcome_label <- res$parameters$laz_var_name
+    } else {
+      outcome_label <- outcome_labels[[i]]
+    }
+    
+    plot_label <- paste0("Antibiotics: ", abx_label, ", Infection: ", inf_label) 
+    
+    # Create dataframe for plotting
+    results_vec <- res$results
+    plot_data <- data.frame(
+      subgroup = c("Antibiotics", "No Antibiotics"),
+      pt_est = c(results_vec['effect_inf_abx'], results_vec['effect_inf_no_abx']),
+      lower_ci = c(results_vec['lower_ci_abx'], results_vec['lower_ci_no_abx']),
+      upper_ci = c(results_vec['upper_ci_abx'], results_vec['upper_ci_no_abx']),
+      label = plot_label
+    )
+    
+    x_loc <- global_x_max - annotation_padding / 2
+    
+    ggplot2::ggplot(data = plot_data, aes(x = pt_est, y = subgroup, color = subgroup)) +
+      geom_point(size = 5) +
+      geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci), height = 0.3) +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "red") +
+      geom_text(aes(x = x_loc, 
+                    label = paste0("Point estimate: ", round(pt_est, 4), 
+                                   "\n95% CI: [", round(lower_ci, 4), ", ", round(upper_ci, 4), "]")), 
+                hjust = 0, vjust = 0.5, size = 5) +
+      labs(title = plot_label,
+           x = "Estimated effect", y = "Treatment subgroup") +
+      theme_minimal(base_size = 14) +
+      labs(color = "Treatment subgroup") +
+      theme(
+        plot.title = element_text(size = 14, hjust = 0.5),
+        axis.title = element_text(size = 14),
+        axis.text = element_text(size = 12)
+      ) +
+      coord_cartesian(xlim = c(global_x_min, global_x_max))
+  })
+  
+  # Combine plots with patchwork, keeping individual plot titles and shared x-axis
+  combined_plot <- wrap_plots(plot_results, ncol = 1) +
+    plot_layout(guides = "collect") & 
+    theme(legend.position = "bottom")
+  
+  return(combined_plot)
 }

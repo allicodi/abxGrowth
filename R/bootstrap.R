@@ -173,6 +173,8 @@ bootstrap_estimates <- function(data,
 #' @param covariate_list character vector containing names of baseline covariates
 #' @param n_boot number of bootstrap replicates to repeat
 #' @param seed seed to set for bootstrap 
+#' @param case_control TRUE if case control analysis, FALSE otherwise
+#' @param case_var_name name of variable indicating case (only needed if case_control = TRUE)
 #' 
 #' @export
 #' 
@@ -187,7 +189,9 @@ aggcomp <- function(data,
                     covariate_list, 
                     severity_list,
                     n_boot = 1000,
-                    seed = 12345){
+                    seed = 12345,
+                    case_control = FALSE,
+                    case_var_name = "case"){
                       
   # set seed
   set.seed(seed)
@@ -201,7 +205,9 @@ aggcomp <- function(data,
                              site_interaction = site_interaction,
                              age_var_name = age_var_name, 
                              covariate_list = covariate_list,
-                             severity_list = severity_list)
+                             severity_list = severity_list,
+                             case_control = case_control,
+                             case_var_name = case_var_name)
   
   # Get standard error and confidence intervals for those point estimates
   bootstrap_results <- bootstrap_estimates(data = data, 
