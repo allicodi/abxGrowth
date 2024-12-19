@@ -44,7 +44,8 @@ abx_growth_gcomp <- function(data,
                              ),
                              site_var_name = "enroll_site",
                              site_interaction = TRUE,
-                             age_var_name = "enr_age_months"){
+                             age_var_name = "enr_age_months",
+                             outcome_type = "gaussian"){
   
   # if age in covariate_list, change to spline with 3 knots to increase flexibility
   if(age_var_name %in% covariate_list){
@@ -262,14 +263,15 @@ abx_growth_gcomp <- function(data,
 
 
 #'
-#' Function to do g-computation for antibiotics growth analysis
+#' Function to do g-computation for antibiotics growth analysis for case-control data
 #' 
 #' @param data dataframe containing dataset to use for gcomp
 #' @param laz_var_name name of growth outcome variable
 #' @param abx_var_name name of binary antibiotic variable
-#' @param infection_var_name name of binary infection variable
-#' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation
+#' @param case_var_name name of binary exposure/case variable 
+#' @param severity_list character vector containing names of severity-related covariates (post-infection). 
 #' @param covariate_list character vector containing names of baseline covariates
+#' @param covariate_list_control character vector containing names of baseline covariates for controls. If NULL, same covariate_list as cases
 #' @param site_var_name name of site covariate in dataset (if applicable, else null)
 #' @param site_interaction TRUE or FALSE indicating interaction between site and antibiotics 
 #' @param age_var_name name of age covariate in dataset (if applicable, else NULL)
@@ -281,8 +283,9 @@ abx_growth_gcomp <- function(data,
 #' @returns 
 #' \describe{
 #'  List of containing the following:
-#'  \item{\code{effect_inf_no_abx}}{numeric effect of infection on growth in subgroup that did *not* receive antibiotics}
-#'  \item{\code{effect_inf_abx}}{numeric effect of infection on growth in subgroup that received antibiotics}
+#'  \item{\code{effect_inf_no_abx}}{effect of infection on growth in subgroup that did *not* receive antibiotics}
+#'  \item{\code{effect_inf_abx}}{effect of infection on growth in subgroup that received antibiotics}
+#'  \item{\code{effect_inf_abx_healthy_control}}{effect of infection on growth in cases that received antibiotics compared to healthy controls (no abx controls)}
 #'  \item{\code{abx_0_inf_1}}{expected growth outcome in infected subgroup who did not receive abx}
 #'  \item{\code{abx_0_inf_0}}{expected growth outcome in uninfected subgroup who did not receive abx}
 #'  \item{\code{abx_1_inf_1}}{expected growth outcome in infected subgroup who received abx}
@@ -291,8 +294,8 @@ abx_growth_gcomp <- function(data,
 abx_growth_gcomp_case_control <- function(data, 
                              laz_var_name = "mo3_haz",
                              abx_var_name = "who_rec_abx",
-                             infection_var_name = "tac_shigella_attributable", # binary variable = 1 if shigella attributable diarrhea / 0 if enrolled as control
-                             severity_list_case = c(
+                             case_var_name = "case", # binary variable = 1 if shigella attributable diarrhea / 0 if enrolled as control
+                             severity_list = c(
                                "enroll_diar_blood",
                                "enroll_diar_vom_days",
                                "enroll_diar_fever_days",
@@ -305,152 +308,192 @@ abx_growth_gcomp_case_control <- function(data,
                                "final_quintile",
                                "enroll_site"
                              ),
+                             covariate_list_control = NULL,
                              site_var_name = "enroll_site",
                              site_interaction = TRUE,
                              age_var_name = "enr_age_months",
-                             case_var_name = "case",
                              outcome_type = "gaussian"){
   
   # get case vs control data
-  case_data <- data[data[[infection_var_name]] == 1,]
-  control_data <- data[data[[infection_var_name]] == 0,]
+  case_data <- data[data[[case_var_name]] == 1,]
+  control_data <- data[data[[case_var_name]] == 0,]
+  
+  # if null, same list as cases
+  if(is.null(covariate_list_control)){
+    covariate_list_control <- covariate_list
+  } 
   
   # if age in covariate_list, change to spline with 3 knots to increase flexibility
-  # TODO: update based on new covariate_list structure
   if(age_var_name %in% covariate_list){
     covariate_list <- covariate_list[covariate_list != age_var_name]
     covariate_list <- c(covariate_list, paste0("splines::ns(", age_var_name, ", df = 4)"))
   }
   
-  if(!is.null(severity_list)){
-    
-    # -----------------------------------
-    # Longitudinal G-Computation 
-    # -----------------------------------
-    
-    # Get model formula 
-    if(site_interaction == "TRUE"){
-      
-      # if site in covariate list, remove for model1 (only want interaction terms)
-      if(length(site_var_name) == 1){
-        if(site_var_name %in% covariate_list){
-          covariate_list <- covariate_list[covariate_list != site_var_name]
-        }
-      } else if (any(site_var_name %in% covariate_list)){
-        covariate_list <- covariate_list[!covariate_list %in% site_var_name]
-      }
-      
-      model_1_formula_case <- stats::as.formula(
-        paste(laz_var_name, "~", 
-         abx_var_name, "+", 
-         paste(covariate_list, collapse = "+"), "+",
-         paste(severity_list_case, collapse = "+"), "+",
-         paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
-         paste0(infection_var_name, "*", abx_var_name))
-      )
-      model_1_formula_control <- stats::as.formula(
-        paste(laz_var_name, "~", 
-         abx_var_name, "+", 
-         paste(covariate_list, collapse = "+"), "+",
-         paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
-         paste0(infection_var_name, "*", abx_var_name))
-      )
+  if(age_var_name %in% covariate_list_control){
+    covariate_list_control <- covariate_list_control[covariate_list_control != age_var_name]
+    covariate_list_control <- c(covariate_list_control, paste0("splines::ns(", age_var_name, ", df = 4)"))
+  }
+  
+  # Get model formula
+  if(site_interaction == "TRUE"){
 
-      # put site back in covariate list
-      if(!is.null(site_var_name)){
-        covariate_list <- c(covariate_list, site_var_name)
+    # if site in covariate list, remove for model1 (only want interaction terms)
+    if(length(site_var_name) == 1){
+      if(site_var_name %in% covariate_list){
+        covariate_list <- covariate_list[covariate_list != site_var_name]
       }
-      
-    } else {
-      
-      # TODO: update based on above
-      # if site was listed but is not already in covariate list, add
-      if(!is.null(site_var_name) & (!(site_var_name %in% covariate_list))){
-        covariate_list <- c(covariate_list, site_var_name)
-      }
-      
-      model_1_formula <- stats::as.formula(paste(laz_var_name, "~", 
-                                                 abx_var_name, "+", infection_var_name, "+", 
-                                                 paste(covariate_list, collapse = "+"), "+",
-                                                 paste(severity_list, collapse = "+"), "+",
-                                                 paste0(infection_var_name, "*", abx_var_name)))
+    } else if (any(site_var_name %in% covariate_list)){
+      covariate_list <- covariate_list[!covariate_list %in% site_var_name]
     }
     
-    # Step 1: regress LAZ on abx, infection, all severity / non-mediating variables
-    model_1_case <- stats::glm(model_1_formula_case,
-                          data = case_data, 
-                          family = outcome_type)
+    if(length(site_var_name) == 1){
+      if(site_var_name %in% covariate_list_control){
+        covariate_list_control <- covariate_list_control[covariate_list_control != site_var_name]
+      }
+    } else if (any(site_var_name %in% covariate_list_control)){
+      covariate_list_control <- covariate_list_control[!covariate_list_control %in% site_var_name]
+    }
     
-    model_1_control <- stats::glm(model_1_formula_control,
-                          data = control_data, 
-                          family = outcome_type)
-    
-    # Step 2: predict from model setting abx = 0, infection = 1
-    data_01 <- case_data
-    data_01[[abx_var_name]] <- 0
-    
-    # predict from the subset model (that no longer includes abx or infection)
-    yhat_01 <- stats::predict(model_1_case, newdata = data_01)
-    
-    # Step 3: regress yhat_01 on all other non-mediating variables in subset with infection = 1, call this model2
-    case_data$yhat_01 <- yhat_01
-    
-    model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list_case, collapse = "+"))),
-                         data = case_data,
-                         family = outcome_type)
-    
-    # Step 4: predict from model2 on everyone, average predictions, call that single number (the avg) ybar_01
-    # TODO: ponder whether this should only avg over control data?
-    ybar_01 <- mean(stats::predict(model2, newdata = data), na.rm = TRUE)
-    
+    model_1_formula_case <- stats::as.formula(
+      paste(laz_var_name, "~",
+       abx_var_name, "+",
+       paste(covariate_list, collapse = "+"), "+",
+       paste(severity_list, collapse = "+"), "+",
+       paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
+       paste0(case_var_name, "*", abx_var_name))
+    )
+    model_1_formula_control <- stats::as.formula(
+      paste(laz_var_name, "~",
+       abx_var_name, "+",
+       paste(covariate_list_control, collapse = "+"), "+",
+       paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
+       paste0(case_var_name, "*", abx_var_name))
+    )
 
-    # Step 9: stats::predict from model1 setting infection = 1 and abx = 1, call that yhat_11
-    data_11 <- case_data
-    data_11[[abx_var_name]] <- 1
-    
-    yhat_11 <- stats::predict(model_1_case, newdata = data_11)
-    
-    # Step 10: regress yhat_11 on all other non-mediating variables in subset with infection = 1, call this model4
-    case_data$yhat_11 <- yhat_11
-    
-    model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
-                         data = case_data,
-                         family = outcome_type)
-    
-    # Step 11: stats::predict from model4 on everyone, average stats::predictions, call avg ybar_11
-    # TODO: ponder if should be control data instead of data
-    ybar_11 <- mean(stats::predict(model4, newdata = data), na.rm = TRUE)
-    
+    # put site back in covariate list
+    if(!is.null(site_var_name)){
+      covariate_list <- c(covariate_list, site_var_name)
+      covariate_list_control <- c(covariate_list_control, site_var_name)
+    }
 
-    # Step 5: predict from model1 setting infection = 0 and abx = 0, call that yhat_00
-    # TODO: ponder if should be control data
-    data_00 <- data
-    data_00[[abx_var_name]] <- 0
-    
-    yhat_00 <- stats::predict(model_1_control, newdata = data_00)
-    ybar_00 <- mean(yhat_00)
+  } else {
 
-    # Step 12: stats::predict from model1 setting infection = 0 and abx = 1, call that yhat_10
-    data_10 <- data
-    data_10[[abx_var_name]] <- 1 
+    # if site was listed but is not already in covariate list, add
+    if(!is.null(site_var_name) & (!(site_var_name %in% covariate_list))){
+      covariate_list <- c(covariate_list, site_var_name)
+    }
     
-    yhat_10 <- stats::predict(model_1_control, newdata = data_10)
-    ybar_10 <- mean(yhat_10)
+    if(!is.null(site_var_name) & (!(site_var_name %in% covariate_list_control))){
+      covariate_list_control <- c(covariate_list_control, site_var_name)
+    }
+
+    model_1_formula <- stats::as.formula(paste(laz_var_name, "~",
+                                               abx_var_name, "+", case_var_name, "+",
+                                               paste(covariate_list, collapse = "+"), "+",
+                                               paste(severity_list, collapse = "+")))
+                                               
+                                               # i don't think this is needed with two sep models?
+                                               #, "+",
+                                               #paste0(case_var_name, "*", abx_var_name)))
     
-     # Step 8: effect of infection without abx = ybar_01 - ybar_00
-    inf_no_abx <- ybar_01 - ybar_00
+    model_1_formula_control <- stats::as.formula(paste(laz_var_name, "~",
+                                                      abx_var_name, "+",
+                                                      paste(covariate_list_control, collapse = "+"), "+",
+                                                      paste(site_var_name, "*", abx_var_name, collapse = "+")))
+                                                      
+                                                      # also not needed?
+                                                      #, "+",
+                                                      # paste0(case_var_name, "*", abx_var_name))
     
-    # Step 15: effect of infection with abx = ybar_11 - ybar_10
-    inf_abx <- ybar_11 - ybar_10
-    
-    # RETURN RESULTS
-    return(list(effect_inf_no_abx = inf_no_abx,
-                effect_inf_abx = inf_abx,
-                abx_0_inf_1 = ybar_01,
-                abx_0_inf_0 = ybar_00,
-                abx_1_inf_1 = ybar_11,
-                abx_1_inf_0 = ybar_10))
-  } 
+  }
+
+  # Step 1: regress LAZ on abx, infection, all severity / non-mediating variables
+  model_1_case <- stats::glm(model_1_formula_case,
+                        data = case_data,
+                        family = outcome_type)
+
+  model_1_control <- stats::glm(model_1_formula_control,
+                        data = control_data,
+                        family = outcome_type)
+
+  # Step 2: predict from model setting abx = 0, infection = 1
+  data_01 <- case_data
+  data_01[[abx_var_name]] <- 0
+
+  # predict from the subset model (that no longer includes abx or infection)
+  yhat_01 <- stats::predict(model_1_case, newdata = data_01)
+
+  # Step 3: regress yhat_01 on all other non-mediating variables in subset with infection = 1, call this model2
+  case_data$yhat_01 <- yhat_01
+
+  model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list, collapse = "+"))),
+                       data = case_data,
+                       family = outcome_type)
+
+  # Step 4: predict from model2 on everyone, average predictions, call that single number (the avg) ybar_01
+  # TODO: ponder whether this should only avg over control data?
+  # ^^ i think yes??
+  ybar_01 <- mean(stats::predict(model2, newdata = control_data), na.rm = TRUE)
+  # ybar_01 <- mean(stats::predict(model2, newdata = data), na.rm = TRUE)
+
+  # Step 9: stats::predict from model1 setting infection = 1 and abx = 1, call that yhat_11
+  data_11 <- case_data
+  data_11[[abx_var_name]] <- 1
+
+  yhat_11 <- stats::predict(model_1_case, newdata = data_11)
+
+  # Step 10: regress yhat_11 on all other non-mediating variables in subset with infection = 1, call this model4
+  case_data$yhat_11 <- yhat_11
+
+  model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
+                       data = case_data,
+                       family = outcome_type)
+
+  # Step 11: stats::predict from model4 on everyone, average stats::predictions, call avg ybar_11
+  # TODO: ponder if should be control data instead of data
+  #ybar_11 <- mean(stats::predict(model4, newdata = data), na.rm = TRUE)
   
+  ybar_11 <- mean(stats::predict(model4, newdata = control_data), na.rm = TRUE)
+
+  # Step 5: predict from model1 setting infection = 0 and abx = 0, call that yhat_00
+  # TODO: ponder if should be control data
+  #data_00 <- data
+  
+  data_00 <- control_data
+  data_00[[abx_var_name]] <- 0
+
+  yhat_00 <- stats::predict(model_1_control, newdata = data_00)
+  ybar_00 <- mean(yhat_00, na.rm = TRUE)
+
+  # Step 12: stats::predict from model1 setting infection = 0 and abx = 1, call that yhat_10
+  
+  ### QUESTION- now is this using severity variables from case data?? we don't want that?? 
+  ## so should it still just be case data instead of data? 
+  # yes
+  
+  #data_10 <- data
+  
+  data_10 <- control_data
+  data_10[[abx_var_name]] <- 1
+
+  yhat_10 <- stats::predict(model_1_control, newdata = data_10)
+  ybar_10 <- mean(yhat_10, na.rm = TRUE)
+
+   # Step 8: effect of infection without abx = ybar_01 - ybar_00
+  inf_no_abx <- ybar_01 - ybar_00
+
+  # Step 15: effect of infection with abx = ybar_11 - ybar_10
+  inf_abx <- ybar_11 - ybar_10
+  
+  # NEW: cases that are treated vs no abx controls
+  case_abx_control_healthy <- ybar_11 - ybar_00
+
+  return(list(effect_inf_no_abx = inf_no_abx,
+              effect_inf_abx = inf_abx,
+              effect_inf_abx_healthy_control = case_abx_control_healthy,
+              abx_0_inf_1 = ybar_01,
+              abx_0_inf_0 = ybar_00,
+              abx_1_inf_1 = ybar_11,
+              abx_1_inf_0 = ybar_10))
 }
 

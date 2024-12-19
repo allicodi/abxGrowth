@@ -15,7 +15,9 @@ aggcomp(
   covariate_list,
   severity_list,
   n_boot = 1000,
-  seed = 12345
+  seed = 12345,
+  case_control = FALSE,
+  case_var_name = "case"
 )
 }
 \arguments{
@@ -40,6 +42,10 @@ aggcomp(
 \item{n_boot}{number of bootstrap replicates to repeat}
 
 \item{seed}{seed to set for bootstrap}
+
+\item{case_control}{TRUE if case control analysis, FALSE otherwise}
+
+\item{case_var_name}{name of variable indicating case (only needed if case_control = TRUE)}
 }
 \value{
 List of class \code{aggcomp_res} containing point estimates, standard error, and 95\% confidence intervals for each effect of interest

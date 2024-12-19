@@ -14,6 +14,7 @@ one_hot_encode(
   age_var_name,
   covariate_list,
   severity_list,
+  covariate_list_control = NULL,
   id_var_name = "pid"
 )
 }
@@ -35,6 +36,8 @@ one_hot_encode(
 \item{covariate_list}{character vector containing names of baseline covariates}
 
 \item{severity_list}{character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation}
+
+\item{covariate_list_control}{character vector containing names of baseline covariates for controls (if applicable, else NULL)}
 
 \item{id_var_name}{name of ID variable in dataset}
 }

@@ -182,7 +182,7 @@ bootstrap_estimates <- function(data,
 aggcomp <- function(data,
                     laz_var_name,
                     abx_var_name,
-                    infection_var_name,
+                    infection_var_name = "hazdiff",
                     site_var_name,
                     site_interaction,
                     age_var_name,
@@ -243,4 +243,6 @@ aggcomp <- function(data,
   return(aggcomp_results)
   
 }
+
+
 

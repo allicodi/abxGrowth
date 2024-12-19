@@ -117,6 +117,7 @@ combine_res <- function(res_list) {
 #' @param age_var_name name of age covariate in dataset (if applicable to add spline, else NULL)
 #' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation
 #' @param covariate_list character vector containing names of baseline covariates
+#' @param covariate_list_control character vector containing names of baseline covariates for controls (if applicable, else NULL)
 #' @param id_var_name name of ID variable in dataset
 #' 
 #' @import fastDummies
@@ -131,6 +132,7 @@ one_hot_encode <- function(data,
                            age_var_name,
                            covariate_list, 
                            severity_list,
+                           covariate_list_control = NULL,
                            id_var_name = "pid"){
   
   # Apply one-hot encoding to the relevant columns
@@ -157,6 +159,23 @@ one_hot_encode <- function(data,
     one_hot_covariate_colnames <- colnames(one_hot_covariate_data)
   } else {
     one_hot_covariate_colnames <- colnames(covariate_data)
+  }
+  
+  if(!is.null(covariate_list_control)){
+    ### Get new column names for covariates (covariate_list will have changed if any are factors)
+    covariate_data_control <- data[,covariate_list_control, drop = FALSE]
+    if(any(sapply(covariate_data_control, is.factor) == TRUE)){
+      one_hot_covariate_data_control <- fastDummies::dummy_cols(covariate_data_control,
+                                                        remove_first_dummy = FALSE,
+                                                        remove_selected_columns = TRUE,
+                                                        ignore_na = TRUE)
+      colnames(one_hot_covariate_data_control) <- gsub(" ", "_", colnames(one_hot_covariate_data_control)) # remove spaces here as well
+      one_hot_covariate_colnames_control <- colnames(one_hot_covariate_data_control)
+    } else {
+      one_hot_covariate_colnames_control <- colnames(covariate_data_control)
+    }
+  } else {
+    one_hot_covariate_colnames_control <- NULL
   }
   
   ### Get new column names for severity variables
@@ -187,6 +206,7 @@ one_hot_encode <- function(data,
   
   return(list(data = one_hot_data,
               covariate_list = one_hot_covariate_colnames,
+              covariate_list_control = one_hot_covariate_colnames_control,
               severity_list = one_hot_severity_colnames,
               site_var_names = one_hot_enroll_site_colnames))
 }
@@ -628,7 +648,7 @@ plot_cis_subplots <- function(results,
   })
   
   # Combine plots with patchwork, keeping individual plot titles and shared x-axis
-  combined_plot <- wrap_plots(plot_results, ncol = 1) +
+  combined_plot <- patchwork::wrap_plots(plot_results, ncol = 1) +
     plot_layout(guides = "collect") & 
     theme(legend.position = "bottom")
   
