@@ -8,13 +8,17 @@ bootstrap_estimates(
   data,
   laz_var_name,
   abx_var_name,
-  infection_var_name,
   site_var_name,
   site_interaction,
   age_var_name,
   covariate_list,
   severity_list,
-  n_boot
+  n_boot,
+  infection_var_name = NULL,
+  case_var_name = NULL,
+  case_control = FALSE,
+  covariate_list_control = NULL,
+  outcome_type = "gaussian"
 )
 }
 \arguments{
@@ -23,8 +27,6 @@ bootstrap_estimates(
 \item{laz_var_name}{name of growth outcome variable}
 
 \item{abx_var_name}{name of binary antibiotic variable}
-
-\item{infection_var_name}{name of binary infection variable}
 
 \item{site_var_name}{name of site covariate in dataset (if applicable, else null)}
 
@@ -37,6 +39,16 @@ bootstrap_estimates(
 \item{severity_list}{character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation}
 
 \item{n_boot}{number of bootstrap replicates to repeat}
+
+\item{infection_var_name}{name of binary infection variable}
+
+\item{case_var_name}{name of variable indicating case (only needed if case_control = TRUE)}
+
+\item{case_control}{TRUE if case control analysis, FALSE otherwise}
+
+\item{covariate_list_control}{covariate list for controls in case-control analysis, if not case control or covariate lists same then NULL}
+
+\item{outcome_type}{gaussian or binomial for continuous or binomial outcome}
 }
 \value{
 \describe{
@@ -59,6 +71,9 @@ List of containing bootstrap standard error and confidence intervals for each ef
 \item{\code{se_abx_1_inf_0}}{boostrap standard error for uninfected subgroup who receieved abx}
 \item{\code{lower_ci_abx_1_inf_0}}{lower bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected}
 \item{\code{upper_ci_abx_1_inf_0}}{upper bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected}
+\item{\code{se_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
+\item{\code{lower_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
+\item{\code{upper_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
 }
 }
 \description{

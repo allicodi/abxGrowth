@@ -13,7 +13,11 @@ one_boot(
   site_interaction,
   age_var_name,
   covariate_list,
-  severity_list
+  severity_list,
+  case_var_name = NULL,
+  case_control = FALSE,
+  covariate_list_control = NULL,
+  outcome_type = "gaussian"
 )
 }
 \arguments{
@@ -33,7 +37,15 @@ one_boot(
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 
-\item{severity_list}{character vector containing names of severity-related covariates (post-infection). If NULL, perform traditional gcomputation. Else, perform longitudinal gcomputation}
+\item{severity_list}{character vector containing names of severity-related covariates (post-infection).}
+
+\item{case_var_name}{name of variable indicating case (only needed if case_control = TRUE)}
+
+\item{case_control}{TRUE if case control analysis, FALSE otherwise}
+
+\item{covariate_list_control}{covariate list for controls in case-control analysis, if not case control or covariate lists same then NULL}
+
+\item{outcome_type}{gaussian or binomial for continuous or binomial outcome}
 }
 \value{
 \describe{
