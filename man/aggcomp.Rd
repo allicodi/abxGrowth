@@ -16,7 +16,7 @@ aggcomp(
   n_boot = 1000,
   seed = 12345,
   case_control = FALSE,
-  infection_var_name = "hazdiff",
+  infection_var_name = NULL,
   case_var_name = "case",
   covariate_list_control = NULL,
   outcome_type = "gaussian"

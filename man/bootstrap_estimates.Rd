@@ -68,12 +68,9 @@ List of containing bootstrap standard error and confidence intervals for each ef
 \item{\code{se_abx_1_inf_1}}{boostrap standard error for infected subgroup who received abx}
 \item{\code{lower_ci_abx_1_inf_1}}{lower bound of 95\% confidence interval for the subgroup that did receive antibiotics and was infected}
 \item{\code{upper_ci_abx_1_inf_1}}{upper bound of 95\% confidence interval for the subgroup that did receive antibiotics and was infected}
-\item{\code{se_abx_1_inf_0}}{boostrap standard error for uninfected subgroup who receieved abx}
-\item{\code{lower_ci_abx_1_inf_0}}{lower bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected}
-\item{\code{upper_ci_abx_1_inf_0}}{upper bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected}
-\item{\code{se_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
-\item{\code{lower_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
-\item{\code{upper_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
+\item{\code{se_abx_1_inf_0}}{boostrap standard error for uninfected subgroup who receieved abx - only in comparison to other diarrhea}
+\item{\code{lower_ci_abx_1_inf_0}}{lower bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected - only in comparison to other diarrhea}
+\item{\code{upper_ci_abx_1_inf_0}}{upper bound of 95\% confidence interval for the subgroup that did receive antibiotics and was not infected - only in comparison to other diarrhea}
 }
 }
 \description{

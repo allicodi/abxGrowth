@@ -12,60 +12,50 @@ print.aggcomp_res <- function(x, ...){
   
   if(class(res) == "case_control_res"){
     row_names <- c("E[Growth | Infection = 1, Abx = 0]",
-                   "E[Growth | Infection = 0, Abx = 0]",
-                   "Effect of infection in no antibiotics subgroup",
                    "E[Growth | Infection = 1, Abx = 1]",
-                   "E[Growth | Infection = 0, Abx = 1]", 
-                   "Effect of infection in antibiotics subgroup",
-                   "Effect of case who received antibiotics vs healthy control")
+                   "E[Growth | Healthy Control]",
+                   "Effect of case not treated with antibiotics vs healthy control",
+                   "Effect of case treated with antibiotics vs healthy control")
     
     col_names <- c("Estimate", "Standard Error", "95% CI: Lower", "95% CI: Upper")
     
     tmp <- data.frame(
       c(res["abx_0_inf_1"],
+        res["abx_1_inf_1"],
         res["abx_0_inf_0"],
         res["effect_inf_no_abx"],
-        res["abx_1_inf_1"],
-        res["abx_1_inf_0"],
-        res["effect_inf_abx"],
-        res["effect_inf_abx_healthy_control"]),
+        res["effect_inf_abx"]),
       c(res["se_abx_0_inf_1"],
+        res["se_abx_1_inf_1"],
         res["se_abx_0_inf_0"],
         res["se_no_abx"],
-        res["se_abx_1_inf_1"],
-        res["se_abx_1_inf_0"],
-        res["se_abx"],
-        res["se_inf_abx_healthy_control"]),
+        res["se_abx"]),
       c(res["lower_ci_abx_0_inf_1"],
+        res["lower_ci_abx_1_inf_1"],
         res["lower_ci_abx_0_inf_0"],
         res["lower_ci_no_abx"],
-        res["lower_ci_abx_1_inf_1"],
-        res["lower_ci_abx_1_inf_0"],
-        res["lower_ci_abx"],
-        res["lower_ci_inf_abx_healthy_control"]),
+        res["lower_ci_abx"]),
       c(res["upper_ci_abx_0_inf_1"],
+        res["upper_ci_abx_1_inf_1"],
         res["upper_ci_abx_0_inf_0"],
         res["upper_ci_no_abx"],
-        res["upper_ci_abx_1_inf_1"],
-        res["upper_ci_abx_1_inf_0"],
-        res["upper_ci_abx"],
-        res["upper_ci_inf_abx_healthy_control"])
+        res["upper_ci_abx"])
     )
     
     colnames(tmp) <- col_names
     rownames(tmp) <- row_names
     
     # Print header with dashed line
-    cat(paste("                           Effect of ", x$parameters$case, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
-    cat(paste(rep("-", 135), collapse = ""), "\n")
-    cat(sprintf("%-60s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
-    cat(paste(rep("-", 135), collapse = ""), "\n")
+    cat(paste("                                       Effect of ", x$parameters$case_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
+    cat(paste(rep("-", 145), collapse = ""), "\n")
+    cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
+    cat(paste(rep("-", 145), collapse = ""), "\n")
     
     for(i in 1:nrow(tmp)){
       row_to_print <- tmp[i, ]
       
       # Adjust the widths as needed
-      formatted_row <- sprintf("%-60s%-20s%-20s%-20s%-20s\n",
+      formatted_row <- sprintf("%-70s%-20s%-20s%-20s%-20s\n",
                                row.names(row_to_print),
                                round(row_to_print[1],4),
                                round(row_to_print[2],4),
@@ -79,9 +69,7 @@ print.aggcomp_res <- function(x, ...){
     
     cat(paste("\nNon-mediating covariates in cases: ", paste(x$parameters$covariate_list, collapse = ", ")))
     cat(paste("\nSeverity related covariates in cases: ", paste(x$parameters$severity_list, collapse = ", "), "\n"))
-    cat(paste("\nNon-mediating covariates in controls: ", paste(x$parameters$covariate_list_control, collapse = ", ")))
-    
-    
+  
   } else{
   
     row_names <- c("E[Growth | Infection = 1, Abx = 0]",
@@ -126,14 +114,14 @@ print.aggcomp_res <- function(x, ...){
     # Print header with dashed line
     cat(paste("                           Effect of ", x$parameters$infection_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups \n"))
     cat(paste(rep("-", 135), collapse = ""), "\n")
-    cat(sprintf("%-60s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
+    cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
     cat(paste(rep("-", 135), collapse = ""), "\n")
     
     for(i in 1:nrow(tmp)){
       row_to_print <- tmp[i, ]
       
       # Adjust the widths as needed
-      formatted_row <- sprintf("%-60s%-20s%-20s%-20s%-20s\n",
+      formatted_row <- sprintf("%-70s%-20s%-20s%-20s%-20s\n",
                                row.names(row_to_print),
                                round(row_to_print[1],4),
                                round(row_to_print[2],4),

@@ -115,7 +115,7 @@ aggcomp <- function(data,
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,
-                       infection_var_name = infection_var_name,
+                       case_var_name = case_var_name,
                        site_var_name = site_var_name,
                        site_interaction = site_interaction,
                        age_var_name = age_var_name, 

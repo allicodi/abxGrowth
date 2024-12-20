@@ -79,7 +79,9 @@ one_boot <- function(data,
     # GEMS:
     # first_id = associated with the child
     # case_id = associated with the case
-    # child_id = associated with the episode
+    # child_id = associated with the episode 
+    
+    # (child_id = case_id if case, child_id = first_id if first time included in study)
     
     # TODO later go back and have these as inputs
     
@@ -191,12 +193,9 @@ one_boot <- function(data,
 #'  \item{\code{se_abx_1_inf_1}}{boostrap standard error for infected subgroup who received abx}
 #'  \item{\code{lower_ci_abx_1_inf_1}}{lower bound of 95% confidence interval for the subgroup that did receive antibiotics and was infected}
 #'  \item{\code{upper_ci_abx_1_inf_1}}{upper bound of 95% confidence interval for the subgroup that did receive antibiotics and was infected}
-#'  \item{\code{se_abx_1_inf_0}}{boostrap standard error for uninfected subgroup who receieved abx}
-#'  \item{\code{lower_ci_abx_1_inf_0}}{lower bound of 95% confidence interval for the subgroup that did receive antibiotics and was not infected}
-#'  \item{\code{upper_ci_abx_1_inf_0}}{upper bound of 95% confidence interval for the subgroup that did receive antibiotics and was not infected}
-#'  \item{\code{se_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
-#'  \item{\code{lower_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
-#'  \item{\code{upper_ci_inf_abx_healthy_control}}{in case-control analysis, boostrap standard error for cases with abx vs healthy controls}
+#'  \item{\code{se_abx_1_inf_0}}{boostrap standard error for uninfected subgroup who receieved abx - only in comparison to other diarrhea}
+#'  \item{\code{lower_ci_abx_1_inf_0}}{lower bound of 95% confidence interval for the subgroup that did receive antibiotics and was not infected - only in comparison to other diarrhea}
+#'  \item{\code{upper_ci_abx_1_inf_0}}{upper bound of 95% confidence interval for the subgroup that did receive antibiotics and was not infected - only in comparison to other diarrhea}
 #'  }
 bootstrap_estimates <- function(data, 
                                 laz_var_name,
@@ -234,10 +233,9 @@ bootstrap_estimates <- function(data,
   boot_res$abx_0_inf_1 <- unlist(boot_res$abx_0_inf_1)
   boot_res$abx_0_inf_0 <- unlist(boot_res$abx_0_inf_0)
   boot_res$abx_1_inf_1 <- unlist(boot_res$abx_1_inf_1)
-  boot_res$abx_1_inf_0 <- unlist(boot_res$abx_1_inf_0)
   
-  if(case_control == TRUE){
-    boot_res$effect_inf_abx_healthy_control <- unlist(boot_res$effect_inf_abx_healthy_control)
+  if(case_control == FALSE){
+    boot_res$abx_1_inf_0 <- unlist(boot_res$abx_1_inf_0)
   }
   
   out <- list()
@@ -252,10 +250,10 @@ bootstrap_estimates <- function(data,
   out$lower_ci_no_abx <- stats::quantile(boot_res$effect_inf_no_abx, p = 0.025, names = FALSE)
   out$upper_ci_no_abx <- stats::quantile(boot_res$effect_inf_no_abx, p = 0.975, names = FALSE)
   
-  if(case_control == TRUE){
-    out$se_inf_abx_healthy_control <- stats::sd(boot_res$effect_inf_abx_healthy_control)
-    out$lower_ci_inf_abx_healthy_control <- stats::quantile(boot_res$effect_inf_abx_healthy_control, p = 0.025, names = FALSE)
-    out$upper_ci_inf_abx_healthy_control <- stats::quantile(boot_res$effect_inf_abx_healthy_control, p = 0.975, names = FALSE)
+  if(case_control == FALSE){
+    out$se_abx_1_inf_0 <- stats::sd(boot_res$abx_1_inf_0)
+    out$lower_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.025, names = FALSE)
+    out$upper_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.975, names = FALSE)
   }
   
   out$se_abx_0_inf_1 <- stats::sd(boot_res$abx_0_inf_1)
@@ -269,10 +267,6 @@ bootstrap_estimates <- function(data,
   out$se_abx_1_inf_1 <- stats::sd(boot_res$abx_1_inf_1)
   out$lower_ci_abx_1_inf_1 <- stats::quantile(boot_res$abx_1_inf_1, p = 0.025, names = FALSE)
   out$upper_ci_abx_1_inf_1 <- stats::quantile(boot_res$abx_1_inf_1, p = 0.975, names = FALSE)
-  
-  out$se_abx_1_inf_0 <- stats::sd(boot_res$abx_1_inf_0)
-  out$lower_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.025, names = FALSE)
-  out$upper_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.975, names = FALSE)
   
   return(out)
 }
