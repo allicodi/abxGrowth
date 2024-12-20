@@ -362,13 +362,18 @@ abx_growth_gcomp_case_control <- function(data,
        paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
        paste0(case_var_name, "*", abx_var_name))
     )
+    # model_1_formula_control <- stats::as.formula(
+    #   paste(laz_var_name, "~",
+    #    abx_var_name, "+",
+    #    paste(covariate_list_control, collapse = "+"), "+",
+    #    paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
+    #    paste0(case_var_name, "*", abx_var_name))
+    # )
+    
+    # TEST REMOVING ABX FROM CONTROL MODEL
     model_1_formula_control <- stats::as.formula(
       paste(laz_var_name, "~",
-       abx_var_name, "+",
-       paste(covariate_list_control, collapse = "+"), "+",
-       paste(site_var_name, "*", abx_var_name, collapse = "+"), "+",
-       paste0(case_var_name, "*", abx_var_name))
-    )
+            paste(covariate_list_control, collapse = "+")))
 
     # put site back in covariate list
     if(!is.null(site_var_name)){

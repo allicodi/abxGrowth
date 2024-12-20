@@ -30,7 +30,7 @@ aggcomp <- function(data,
                     n_boot = 1000,
                     seed = 12345,
                     case_control = FALSE,
-                    infection_var_name = "hazdiff",
+                    infection_var_name = NULL,
                     case_var_name = "case",
                     covariate_list_control = NULL,
                     outcome_type = "gaussian"){
@@ -49,8 +49,6 @@ aggcomp <- function(data,
                                age_var_name = age_var_name, 
                                covariate_list = covariate_list,
                                severity_list = severity_list,
-                               case_control = case_control,
-                               case_var_name = case_var_name,
                                outcome_type = outcome_type)
     
     # Get standard error and confidence intervals for those point estimates

@@ -56,7 +56,7 @@ print.aggcomp_res <- function(x, ...){
     rownames(tmp) <- row_names
     
     # Print header with dashed line
-    cat(paste("                           Effect of ", x$parameters$infection_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
+    cat(paste("                           Effect of ", x$parameters$case, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
     cat(paste(rep("-", 135), collapse = ""), "\n")
     cat(sprintf("%-60s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
     cat(paste(rep("-", 135), collapse = ""), "\n")
