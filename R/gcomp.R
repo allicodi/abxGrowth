@@ -382,7 +382,7 @@ abx_growth_gcomp_case_control <- function(data,
   # Predict from model setting abx = 0
   data_01 <- case_data
   data_01[[abx_var_name]] <- 0
-  yhat_01 <- stats::predict(model_1_case, newdata = data_01)
+  yhat_01 <- stats::predict(model_1_case, newdata = data_01, type = "response")
 
   # Regress yhat_01 on all other non-mediating variables 
   case_data$yhat_01 <- yhat_01
@@ -392,13 +392,13 @@ abx_growth_gcomp_case_control <- function(data,
                        family = outcome_type)
 
   # Predict from model2 on controls
-  ybar_01 <- mean(stats::predict(model2, newdata = control_data), na.rm = TRUE)
+  ybar_01 <- mean(stats::predict(model2, newdata = control_data, type = "response"), na.rm = TRUE)
   
   # stats::predict from model1 setting infection = 1 and abx = 1, call that yhat_11
   data_11 <- case_data
   data_11[[abx_var_name]] <- 1
 
-  yhat_11 <- stats::predict(model_1_case, newdata = data_11)
+  yhat_11 <- stats::predict(model_1_case, newdata = data_11, type = "response")
 
   # Regress yhat_11 on all other non-mediating variables, call this model4
   case_data$yhat_11 <- yhat_11
@@ -408,7 +408,7 @@ abx_growth_gcomp_case_control <- function(data,
                        family = outcome_type)
 
   # stats::predict from model4 on controls, average stats::predictions, call avg ybar_11
-  ybar_11 <- mean(stats::predict(model4, newdata = control_data), na.rm = TRUE)
+  ybar_11 <- mean(stats::predict(model4, newdata = control_data, type = "response"), na.rm = TRUE)
 
   # ------------------------------------------------------------
   # Part 2: E[Growth | Control]

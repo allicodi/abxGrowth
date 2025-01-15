@@ -81,9 +81,11 @@ one_boot <- function(data,
     # case_id = associated with the case
     # child_id = associated with the episode 
     
+    # make VIDA have same structure except first_id = child_id for now
+    
     # (child_id = case_id if case, child_id = first_id if first time included in study)
     
-    # TODO later go back and have these as inputs
+    # TODO make more generalizable, go back and have these as inputs
     
     # NOT POSITIVE THIS IS WORKING RIGHT
    

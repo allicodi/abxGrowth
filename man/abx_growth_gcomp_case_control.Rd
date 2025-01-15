@@ -45,13 +45,11 @@ abx_growth_gcomp_case_control(
 \value{
 \describe{
 List of containing the following:
-\item{\code{effect_inf_no_abx}}{effect of infection on growth in subgroup that did \emph{not} receive antibiotics}
-\item{\code{effect_inf_abx}}{effect of infection on growth in subgroup that received antibiotics}
-\item{\code{effect_inf_abx_healthy_control}}{effect of infection on growth in cases that received antibiotics compared to healthy controls (no abx controls)}
+\item{\code{effect_inf_no_abx}}{effect of infection on growth in subgroup that did \emph{not} receive antibiotics vs heathy controls}
+\item{\code{effect_inf_abx}}{effect of infection on growth in subgroup that received antibiotics vs healthy controls}
 \item{\code{abx_0_inf_1}}{expected growth outcome in infected subgroup who did not receive abx}
-\item{\code{abx_0_inf_0}}{expected growth outcome in uninfected subgroup who did not receive abx}
+\item{\code{abx_0_inf_0}}{expected growth outcome in healthy controls}
 \item{\code{abx_1_inf_1}}{expected growth outcome in infected subgroup who received abx}
-\item{\code{abx_1_inf_0}}{expected growth outcome in uninfected subgroup who receieved abx}
 }
 }
 \description{
