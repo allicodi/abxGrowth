@@ -119,8 +119,23 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_1,
                   family = outcome_type)
     
-    # Step 4: predict from model2 on everyone, average predictions, call that single number (the avg) ybar_01
-    ybar_01 <- mean(stats::predict(model2, newdata = data), na.rm = TRUE)
+    ## NEW: GLMM style avg over child first
+    
+    # Step 4a: predict from model2 on everyone
+    data$ybar_01_preds <- stats::predict(model2, newdata = data)
+    
+    # Step 4b: average over child (if child_id in data) then avg over all children
+    if("child_id" %in% colnames(data)){
+      # multiple enrollments avg together
+      ybar_01_child <- aggregate(ybar_01_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_01_preds
+      ybar_01 <- mean(ybar_01_child, na.rm = TRUE)
+    } else {
+      # assume all children unique, skip to mean of preds directly
+      ybar_01 <- mean(data$ybar_01_preds, na.rm = TRUE)
+    }
+    
+    # Old:
+    # ybar_01 <- mean(stats::predict(model2, newdata = data), na.rm = TRUE)
     
     # Step 5: predict from model1 setting infection = 0 and abx = 0, call that yhat_00
     data_00 <- data
@@ -138,8 +153,23 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_0,
                   family = outcome_type)
     
-    # Step 7: stats::predict from model3 on everyone, average stats::predictions, call that number ybar_00
-    ybar_00 <- mean(stats::predict(model3, newdata = data), na.rm = TRUE)
+    ## NEW: GLMM style avg over child first
+    
+    # Step 7a: stats::predict from model3 on everyone
+    data$ybar_00_preds <- stats::predict(model3, newdata = data)
+    
+    # Step 7b: average over child (if child_id in data) then avg over all children
+    if("child_id" %in% colnames(data)){
+      # multiple enrollments avg together
+      ybar_00_child <- aggregate(ybar_00_preds ~ child_id, data = data, FUN = mean, na.rm = TRUE)$ybar_00_preds
+      ybar_00 <- mean(ybar_00_child, na.rm = TRUE)
+    } else {
+      # assume all children unique, skip to mean of preds directly
+      ybar_00 <- mean(data$ybar_00_preds, na.rm = TRUE)
+    }
+    
+    # Old:
+    #ybar_00 <- mean(stats::predict(model3, newdata = data), na.rm = TRUE)
     
     # Step 8: effect of infection without abx = ybar_01 - ybar_00
     inf_no_abx <- ybar_01 - ybar_00
@@ -160,8 +190,25 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_1,
                   family = outcome_type)
     
-    # Step 11: stats::predict from model4 on everyone, average stats::predictions, call avg ybar_11
-    ybar_11 <- mean(stats::predict(model4, newdata = data), na.rm = TRUE)
+    
+    
+    ## NEW: GLMM style avg over child first
+    
+    # Step 11a: predict from model4 on everyone
+    data$ybar_11_preds <- stats::predict(model4, newdata = data)
+    
+    # Step 11b: average over child (if child_id in data) then avg over all children
+    if("child_id" %in% colnames(data)){
+      # multiple enrollments avg together
+      ybar_11_child <- aggregate(ybar_11_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_11_preds
+      ybar_11 <- mean(ybar_11_child, na.rm = TRUE)
+    } else {
+      # assume all children unique, skip to mean of preds directly
+      ybar_11 <- mean(data$ybar_11_preds, na.rm = TRUE)
+    }
+    
+    # Old:
+    # ybar_11 <- mean(stats::predict(model4, newdata = data), na.rm = TRUE)
     
     # Step 12: stats::predict from model1 setting infection = 0 and abx = 1, call that yhat_10
     data_10 <- data
@@ -180,8 +227,21 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_0,
                   family = outcome_type)
     
-    # Step 14: stats::predict from model5 on everyone, average stats::predictions, call that avg ybar_10
-    ybar_10 <- mean(stats::predict(model5, newdata = data), na.rm = TRUE)
+    # Step 14a: predict from model4 on everyone
+    data$ybar_10_preds <- stats::predict(model5, newdata = data)
+    
+    # Step 14b: average over child (if child_id in data) then avg over all children
+    if("child_id" %in% colnames(data)){
+      # multiple enrollments avg together
+      ybar_10_child <- aggregate(ybar_10_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_10_preds
+      ybar_10 <- mean(ybar_10_child, na.rm = TRUE)
+    } else {
+      # assume all children unique, skip to mean of preds directly
+      ybar_10 <- mean(data$ybar_10_preds, na.rm = TRUE)
+    }
+    
+    # Old:
+    # ybar_10 <- mean(stats::predict(model5, newdata = data), na.rm = TRUE)
     
     # Step 15: effect of infection with abx = ybar_11 - ybar_10
     inf_abx <- ybar_11 - ybar_10
@@ -221,14 +281,34 @@ abx_growth_gcomp <- function(data,
     data_01[[infection_var_name]] <- 1
     data_01[[abx_var_name]] <- 0
     
-    ybar_01 <- mean(stats::predict(model_1, newdata = data_01), na.rm = TRUE)
+    ## NEW: GLMM style avg over child first
+    
+    data$yhat_01 <- stats::predict(model_1, newdata = data_01)
+    if("child_id" %in% colnames(data)){
+      yhat_01_child <- aggregate(yhat_01 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_01
+      ybar_01 <- mean(yhat_01_child, na.rm = TRUE)
+    } else {
+      ybar_01 <- mean(data$yhat_01, na.rm = TRUE)
+    }
+    
+    #ybar_01 <- mean(stats::predict(model_1, newdata = data_01), na.rm = TRUE)
     
     # Predict Abx 0, infection 0
     data_00 <- data
     data_00[[infection_var_name]] <- 0
     data_00[[abx_var_name]] <- 0
     
-    ybar_00 <- mean(stats::predict(model_1, newdata = data_00), na.rm = TRUE)
+    ## NEW: GLMM style avg over child first
+    
+    data$yhat_00 <- stats::predict(model_1, newdata = data_00)
+    if("child_id" %in% colnames(data)){
+      yhat_00_child <- aggregate(yhat_00 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_00
+      ybar_00 <- mean(yhat_00_child, na.rm = TRUE)
+    } else {
+      ybar_01 <- mean(data$yhat_01, na.rm = TRUE)
+    }
+    
+    #ybar_00 <- mean(stats::predict(model_1, newdata = data_00), na.rm = TRUE)
     
     # Difference
     inf_no_abx <- ybar_01 - ybar_00
@@ -238,14 +318,35 @@ abx_growth_gcomp <- function(data,
     data_11[[infection_var_name]] <- 1
     data_11[[abx_var_name]] <- 1
     
-    ybar_11 <- mean(stats::predict(model_1, newdata = data_11), na.rm = TRUE)
+    
+    ## NEW: GLMM style avg over child first
+    
+    data$yhat_11 <- stats::predict(model_1, newdata = data_11)
+    if("child_id" %in% colnames(data)){
+      yhat_11_child <- aggregate(yhat_11 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_11
+      ybar_11 <- mean(yhat_11_child, na.rm = TRUE)
+    } else {
+      ybar_11 <- mean(data$yhat_11, na.rm = TRUE)
+    }
+    
+    #ybar_11 <- mean(stats::predict(model_1, newdata = data_11), na.rm = TRUE)
     
     # Predict Abx 1, infection 0
     data_10 <- data
     data_10[[infection_var_name]] <- 0
     data_10[[abx_var_name]] <- 1
     
-    ybar_10 <- mean(stats::predict(model_1, newdata = data_10), na.rm = TRUE)
+    ## NEW: GLMM style avg over child first
+    
+    data$yhat_10 <- stats::predict(model_1, newdata = data_10)
+    if("child_id" %in% colnames(data)){
+      yhat_10_child <- aggregate(yhat_10 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_10
+      ybar_10 <- mean(yhat_10_child, na.rm = TRUE)
+    } else {
+      ybar_10 <- mean(data$yhat_10, na.rm = TRUE)
+    }
+    
+    #ybar_10 <- mean(stats::predict(model_1, newdata = data_10), na.rm = TRUE)
     
     # Difference
     inf_abx <- ybar_11 - ybar_10
