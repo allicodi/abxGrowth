@@ -87,60 +87,110 @@ one_boot <- function(data,
     
     # TODO make more generalizable, go back and have these as inputs
     
-    # NOT POSITIVE THIS IS WORKING RIGHT
-   
-    # get unique pids for episodes
-    boot_child_id <- sample(unique(data$child_id), replace = TRUE)
-
-    i <- 1
-    n <- 0
-    final_idxs <- c()
-
-    # ----------------------------------------------------------------------------
-    # Recursive helper function to get all indexes that are associated with
-    # cases + controls for the given episode's case and control idxs
-    # ----------------------------------------------------------------------------
-    get_all_matching <- function(idxs){
-      # Find any other instances of the child in the dataset and the matches that go along with that
-      first_ids <- data$first_id[idxs]
-      first_id_idxs <- which(data$first_id %in% first_ids)
-
-      # Add any new observations to idxs
-      idxs <- unique(c(idxs, first_id_idxs))
-
-      # Make sure all cases/controls associated with those indexes are included
-      case_ids <- data$case_id[idxs]
-      child_ids <- data$child_id[idxs]
-      new_idxs <- unique(c(which(data$case_id %in% case_ids), which(data$child_id %in% child_ids)))
-
-      if (!identical(unique(new_idxs), unique(idxs))) {
-        #print("this is where recursion would be helpful but brain blah")
-        get_all_matching(new_idxs)
-      } else{
-        return(new_idxs)
-      }
-    }
-
-    while(n < nrow(data)){
-      child_idx <- which(data$child_id == boot_child_id[i])
-
-      if(data[child_idx, "case"] == 1){
-        # Sampled Case; find the control(s) that match
-        idxs <- which(data$case_id == data$case_id[child_idx])
-        final_idxs <- c(final_idxs, get_all_matching(idxs))
-
-      } else{
-        # Sampled Control; find the case and any other controls that match
-        idxs <- which(data$case_id == data[child_idx, "case_id"])
-        final_idxs <- c(final_idxs, get_all_matching(idxs))
-
-      }
-
-      n <- length(final_idxs)
-      i <- i + 1
+    unique_first_id <- unique(data$first_id[data$case == 1,])        # unique children who are cases in the study to sample from
+    n_children <- length(unique_first_id)           # number of unique cases in the study to sample
+    i <- 0                                                           # counter for number of children to sample
+    
+    # ---------------------------------------------------------------
+    # Helper function for child-level bootstrap sampling
+    # ---------------------------------------------------------------
+    get_matching <- function(sampled, data){
+      # look for anywhere else with matching first_id
+      match_first <- data[data$first_id %in% sampled,]
+      
+      # get case ids (episodes) each first id falls into
+      episode_data <- data[data$case_id %in% unique(match_first$case_id),]
+      
+      # If new first_ids are found, repeat recursively
+      if (!setequal(sampled, unique(episode_data$first_id))) {
+        # Merge the new first_ids into sampled 
+        sampled <- unique(c(sampled, episode_data$first_id))
+        # Repeat function with new ids
+        return(get_matching(sampled, data))
+      } 
+      
+      # return rows of dataframe corresponding to the first ids needed
+      return(data[data$first_id %in% sampled,])
+      
     }
     
-    boot_data <- data[final_idxs, , drop = FALSE]
+    
+    # dataframe to hold bootstrap dataset
+    boot_data <- data.frame()
+    
+    while(i < n_children){
+      #Sample a child
+      sampled <- sample(unique_first_id, 1)
+      
+      # Get rows corresponding to sampled child, 
+      # all cases/controls matched to sample child, 
+      # and any cases/controls matched to subsequent matched children
+      sampled_rows <- get_matching(sampled, data)
+      
+      # Add to boot data
+      boot_data <- rbind(boot_data, sampled_rows)
+      
+      # Add number of sampled children to children counter
+      i <- i + length(unique(sampled_rows$first_id))
+    }
+    
+    # --------------------------------------------------------------------------------
+    # OLD VERSION 
+    # # NOT POSITIVE THIS IS WORKING RIGHT
+    # 
+    # # get unique pids for episodes
+    # boot_child_id <- sample(unique(data$child_id), replace = TRUE)
+    # 
+    # i <- 1
+    # n <- 0
+    # final_idxs <- c()
+    # 
+    # # ----------------------------------------------------------------------------
+    # # Recursive helper function to get all indexes that are associated with
+    # # cases + controls for the given episode's case and control idxs
+    # # ----------------------------------------------------------------------------
+    # get_all_matching <- function(idxs){
+    #   # Find any other instances of the child in the dataset and the matches that go along with that
+    #   first_ids <- data$first_id[idxs]
+    #   first_id_idxs <- which(data$first_id %in% first_ids)
+    # 
+    #   # Add any new observations to idxs
+    #   idxs <- unique(c(idxs, first_id_idxs))
+    # 
+    #   # Make sure all cases/controls associated with those indexes are included
+    #   case_ids <- data$case_id[idxs]
+    #   child_ids <- data$child_id[idxs]
+    #   new_idxs <- unique(c(which(data$case_id %in% case_ids), which(data$child_id %in% child_ids)))
+    # 
+    #   if (!identical(unique(new_idxs), unique(idxs))) {
+    #     #print("this is where recursion would be helpful but brain blah")
+    #     get_all_matching(new_idxs)
+    #   } else{
+    #     return(new_idxs)
+    #   }
+    # }
+    # 
+    # while(n < nrow(data)){
+    #   child_idx <- which(data$child_id == boot_child_id[i])
+    # 
+    #   if(data[child_idx, "case"] == 1){
+    #     # Sampled Case; find the control(s) that match
+    #     idxs <- which(data$case_id == data$case_id[child_idx])
+    #     final_idxs <- c(final_idxs, get_all_matching(idxs))
+    # 
+    #   } else{
+    #     # Sampled Control; find the case and any other controls that match
+    #     idxs <- which(data$case_id == data[child_idx, "case_id"])
+    #     final_idxs <- c(final_idxs, get_all_matching(idxs))
+    # 
+    #   }
+    # 
+    #   n <- length(final_idxs)
+    #   i <- i + 1
+    # }
+    # 
+    # boot_data <- data[final_idxs, , drop = FALSE]
+    # --------------------------------------------------------------------------------
     
     boot_res <- abx_growth_gcomp_case_control(data = boot_data,
                                               laz_var_name = laz_var_name,
