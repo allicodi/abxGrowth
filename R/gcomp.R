@@ -426,6 +426,9 @@ abx_growth_gcomp_case_control <- function(data,
   case_data <- data[data[[case_var_name]] == 1,]
   control_data <- data[data[[case_var_name]] == 0,]
   
+  # healthy controls only (no abx)
+  control_data <- control_data[control_data[[abx_var_name]] == 0,]
+  
   # if null, same list as cases
   if(is.null(covariate_list_control)){
     covariate_list_control <- covariate_list
