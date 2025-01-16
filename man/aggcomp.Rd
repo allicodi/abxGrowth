@@ -19,7 +19,8 @@ aggcomp(
   infection_var_name = NULL,
   case_var_name = "case",
   covariate_list_control = NULL,
-  outcome_type = "gaussian"
+  outcome_type = "gaussian",
+  att = TRUE
 )
 }
 \arguments{
@@ -52,6 +53,8 @@ aggcomp(
 \item{covariate_list_control}{covariate list for controls in case-control analysis, if not case control or covariate lists same then NULL}
 
 \item{outcome_type}{gaussian or binomial for continuous or binomial outcome}
+
+\item{att}{boolean if effect should be estimated among people who would naturally get infection, default TRUE}
 }
 \value{
 List of class \code{aggcomp_res} containing point estimates, standard error, and 95\% confidence intervals for each effect of interest

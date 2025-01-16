@@ -11,6 +11,7 @@
 #' @param site_interaction TRUE or FALSE indicating interaction between site and antibiotics 
 #' @param age_var_name name of age covariate in dataset (if applicable, else NULL)
 #' @param outcome_type gaussian or binomial for continuous or binomial outcome
+#' @param att boolean if effect should be estimated among people who would naturally get infection, default TRUE
 #' 
 #' @import splines
 #' @export
@@ -45,7 +46,8 @@ abx_growth_gcomp <- function(data,
                              site_var_name = "enroll_site",
                              site_interaction = TRUE,
                              age_var_name = "enr_age_months",
-                             outcome_type = "gaussian"){
+                             outcome_type = "gaussian",
+                             att = TRUE){
   
   # if age in covariate_list, change to spline with 3 knots to increase flexibility
   if(age_var_name %in% covariate_list){
@@ -108,41 +110,32 @@ abx_growth_gcomp <- function(data,
     data_01[[abx_var_name]] <- 0
     
     # predict from the subset model (that no longer includes abx or infection)
-    yhat_01 <- stats::predict(model_1, newdata = data_01)
+    yhat_01 <- stats::predict(model_1, newdata = data_01, type = "response")
     
-    # Step 3: regress yhat_01 on all other non-mediating variables in subset with infection = 1, call this model2
-    data$yhat_01 <- yhat_01
-    sub_inf_1 <- data[data[[infection_var_name]] == 1,]
-    
-    # covariate list for the exposed (may or may not include the pathogens)
-    model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list, collapse = "+"))),
-                  data = sub_inf_1,
-                  family = outcome_type)
-    
-    ## NEW: GLMM style avg over child first
-    
-    # Step 4a: predict from model2 on everyone
-    data$ybar_01_preds <- stats::predict(model2, newdata = data)
-    
-    # Step 4b: average over child (if child_id in data) then avg over all children
-    if("child_id" %in% colnames(data)){
-      # multiple enrollments avg together
-      ybar_01_child <- aggregate(ybar_01_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_01_preds
-      ybar_01 <- mean(ybar_01_child, na.rm = TRUE)
-    } else {
-      # assume all children unique, skip to mean of preds directly
+    if(!att){
+      # Step 3: regress yhat_01 on all other non-mediating variables in subset with infection = 1, call this model2
+      data$yhat_01 <- yhat_01
+      sub_inf_1 <- data[data[[infection_var_name]] == 1,]
+      
+      # covariate list for the exposed (may or may not include the pathogens)
+      model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list, collapse = "+"))),
+                    data = sub_inf_1,
+                    family = outcome_type)
+      
+      # Step 4: predict from model2 on everyone and average
+      data$ybar_01_preds <- stats::predict(model2, newdata = data, type = "response")
       ybar_01 <- mean(data$ybar_01_preds, na.rm = TRUE)
+      
+    }else{
+      ybar_01 <- mean(yhat_01[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
-    
-    # Old:
-    # ybar_01 <- mean(stats::predict(model2, newdata = data), na.rm = TRUE)
     
     # Step 5: predict from model1 setting infection = 0 and abx = 0, call that yhat_00
     data_00 <- data
     data_00[[infection_var_name]] <- 0
     data_00[[abx_var_name]] <- 0
     
-    yhat_00 <- stats::predict(model_1, newdata = data_00)
+    yhat_00 <- stats::predict(model_1, newdata = data_00, type = "response")
     
     # Step 6: regress yhat_00 on all other non-mediating variables in subset with infection = 0, call this model3
     data$yhat_00 <- yhat_00
@@ -153,24 +146,14 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_0,
                   family = outcome_type)
     
-    ## NEW: GLMM style avg over child first
-    
-    # Step 7a: stats::predict from model3 on everyone
-    data$ybar_00_preds <- stats::predict(model3, newdata = data)
-    
-    # Step 7b: average over child (if child_id in data) then avg over all children
-    if("child_id" %in% colnames(data)){
-      # multiple enrollments avg together
-      ybar_00_child <- aggregate(ybar_00_preds ~ child_id, data = data, FUN = mean, na.rm = TRUE)$ybar_00_preds
-      ybar_00 <- mean(ybar_00_child, na.rm = TRUE)
-    } else {
-      # assume all children unique, skip to mean of preds directly
+    # Step 7: stats::predict from model3 on everyone
+    if(!att){
+      data$ybar_00_preds <- stats::predict(model3, newdata = data, type = "response")
       ybar_00 <- mean(data$ybar_00_preds, na.rm = TRUE)
+    }else{
+      ybar_00 <- mean(stats::predict(model3, newdata = data[data[[infection_var_name]] == 1,], type = "response"), na.rm = TRUE)
     }
-    
-    # Old:
-    #ybar_00 <- mean(stats::predict(model3, newdata = data), na.rm = TRUE)
-    
+
     # Step 8: effect of infection without abx = ybar_01 - ybar_00
     inf_no_abx <- ybar_01 - ybar_00
     
@@ -179,36 +162,25 @@ abx_growth_gcomp <- function(data,
     data_11[[infection_var_name]] <- 1
     data_11[[abx_var_name]] <- 1
     
-    yhat_11 <- stats::predict(model_1, newdata = data_11)
+    yhat_11 <- stats::predict(model_1, newdata = data_11, type = "response")
     
-    # Step 10: regress yhat_11 on all other non-mediating variables in subset with infection = 1, call this model4
-    data$yhat_11 <- yhat_11
-    sub_inf_1 <- data[data[[infection_var_name]] == 1,]
-    
-    # same as above -- don't include quant shig here
-    model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
-                  data = sub_inf_1,
-                  family = outcome_type)
-    
-    
-    
-    ## NEW: GLMM style avg over child first
-    
-    # Step 11a: predict from model4 on everyone
-    data$ybar_11_preds <- stats::predict(model4, newdata = data)
-    
-    # Step 11b: average over child (if child_id in data) then avg over all children
-    if("child_id" %in% colnames(data)){
-      # multiple enrollments avg together
-      ybar_11_child <- aggregate(ybar_11_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_11_preds
-      ybar_11 <- mean(ybar_11_child, na.rm = TRUE)
-    } else {
-      # assume all children unique, skip to mean of preds directly
+    if(!att){
+      # Step 10: regress yhat_11 on all other non-mediating variables in subset with infection = 1, call this model4
+      data$yhat_11 <- yhat_11
+      sub_inf_1 <- data[data[[infection_var_name]] == 1,]
+      
+      # covariate list for the exposed (may or may not include the pathogens)
+      model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
+                           data = sub_inf_1,
+                           family = outcome_type)
+      
+      # Step 11: predict from model2 on everyone and average
+      data$ybar_11_preds <- stats::predict(model4, newdata = data, type = "response")
       ybar_11 <- mean(data$ybar_11_preds, na.rm = TRUE)
+      
+    }else{
+      ybar_11 <- mean(yhat_11[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
-    
-    # Old:
-    # ybar_11 <- mean(stats::predict(model4, newdata = data), na.rm = TRUE)
     
     # Step 12: stats::predict from model1 setting infection = 0 and abx = 1, call that yhat_10
     data_10 <- data
@@ -216,7 +188,7 @@ abx_growth_gcomp <- function(data,
     data_10[[infection_var_name]] <- 0
     data_10[[abx_var_name]] <- 1 
     
-    yhat_10 <- stats::predict(model_1, newdata = data_10)
+    yhat_10 <- stats::predict(model_1, newdata = data_10, type = "response")
     
     # Step 13: regress yhat_10 on all other blah blah in subset with infection = 0, call this model5
     data$yhat_10 <- yhat_10
@@ -227,21 +199,13 @@ abx_growth_gcomp <- function(data,
                   data = sub_inf_0,
                   family = outcome_type)
     
-    # Step 14a: predict from model4 on everyone
-    data$ybar_10_preds <- stats::predict(model5, newdata = data)
-    
-    # Step 14b: average over child (if child_id in data) then avg over all children
-    if("child_id" %in% colnames(data)){
-      # multiple enrollments avg together
-      ybar_10_child <- aggregate(ybar_10_preds ~ child_id, data = data, FUN = mean, na.rm=TRUE)$ybar_10_preds
-      ybar_10 <- mean(ybar_10_child, na.rm = TRUE)
-    } else {
-      # assume all children unique, skip to mean of preds directly
+    # Step 7: stats::predict from model3 on everyone
+    if(!att){
+      data$ybar_10_preds <- stats::predict(model5, newdata = data, type = "response")
       ybar_10 <- mean(data$ybar_10_preds, na.rm = TRUE)
+    }else{
+      ybar_10 <- mean(stats::predict(model5, newdata = data[data[[infection_var_name]] == 1,], type = "response"), na.rm = TRUE)
     }
-    
-    # Old:
-    # ybar_10 <- mean(stats::predict(model5, newdata = data), na.rm = TRUE)
     
     # Step 15: effect of infection with abx = ybar_11 - ybar_10
     inf_abx <- ybar_11 - ybar_10
@@ -281,34 +245,24 @@ abx_growth_gcomp <- function(data,
     data_01[[infection_var_name]] <- 1
     data_01[[abx_var_name]] <- 0
     
-    ## NEW: GLMM style avg over child first
-    
-    data$yhat_01 <- stats::predict(model_1, newdata = data_01)
-    if("child_id" %in% colnames(data)){
-      yhat_01_child <- aggregate(yhat_01 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_01
-      ybar_01 <- mean(yhat_01_child, na.rm = TRUE)
-    } else {
-      ybar_01 <- mean(data$yhat_01, na.rm = TRUE)
+    if(!att){
+      ybar_01 <- mean(stats::predict(model_1, newdata = data_01, type = "response"), na.rm = TRUE)
+    } else{
+      data$yhat_01 <- stats::predict(model_1, newdata = data_01, type = "response")
+      ybar_01 <- mean(data$yhat_01[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
-    
-    #ybar_01 <- mean(stats::predict(model_1, newdata = data_01), na.rm = TRUE)
-    
+   
     # Predict Abx 0, infection 0
     data_00 <- data
     data_00[[infection_var_name]] <- 0
     data_00[[abx_var_name]] <- 0
     
-    ## NEW: GLMM style avg over child first
-    
-    data$yhat_00 <- stats::predict(model_1, newdata = data_00)
-    if("child_id" %in% colnames(data)){
-      yhat_00_child <- aggregate(yhat_00 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_00
-      ybar_00 <- mean(yhat_00_child, na.rm = TRUE)
+    if(!att){
+      ybar_00 <- mean(stats::predict(model_1, newdata = data_00), na.rm = TRUE)
     } else {
-      ybar_01 <- mean(data$yhat_01, na.rm = TRUE)
+      data$yhat_00 <- stats::predict(model_1, newdata = data_00, type = "response")
+      ybar_00 <- mean(data$yhat_00[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
-    
-    #ybar_00 <- mean(stats::predict(model_1, newdata = data_00), na.rm = TRUE)
     
     # Difference
     inf_no_abx <- ybar_01 - ybar_00
@@ -318,35 +272,24 @@ abx_growth_gcomp <- function(data,
     data_11[[infection_var_name]] <- 1
     data_11[[abx_var_name]] <- 1
     
-    
-    ## NEW: GLMM style avg over child first
-    
-    data$yhat_11 <- stats::predict(model_1, newdata = data_11)
-    if("child_id" %in% colnames(data)){
-      yhat_11_child <- aggregate(yhat_11 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_11
-      ybar_11 <- mean(yhat_11_child, na.rm = TRUE)
-    } else {
-      ybar_11 <- mean(data$yhat_11, na.rm = TRUE)
+    if(!att){
+      ybar_11 <- mean(stats::predict(model_1, newdata = data_11, type = "response"), na.rm = TRUE)
+    } else{
+      data$yhat_11 <- stats::predict(model_1, newdata = data_11, type = "response")
+      ybar_11 <- mean(data$yhat_11[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
-    
-    #ybar_11 <- mean(stats::predict(model_1, newdata = data_11), na.rm = TRUE)
     
     # Predict Abx 1, infection 0
     data_10 <- data
     data_10[[infection_var_name]] <- 0
     data_10[[abx_var_name]] <- 1
     
-    ## NEW: GLMM style avg over child first
-    
-    data$yhat_10 <- stats::predict(model_1, newdata = data_10)
-    if("child_id" %in% colnames(data)){
-      yhat_10_child <- aggregate(yhat_10 ~ child_id, data = data, FUN = mean, na.rm=TRUE)$yhat_10
-      ybar_10 <- mean(yhat_10_child, na.rm = TRUE)
-    } else {
+    if(!att){
+      ybar_10 <- mean(stats::predict(model_1, newdata = data_10, type = "response"), na.rm = TRUE)
+    } else{
+      data$yhat_10 <- stats::predict(model_1, newdata = data_10, type = "response")
       ybar_10 <- mean(data$yhat_10, na.rm = TRUE)
     }
-    
-    #ybar_10 <- mean(stats::predict(model_1, newdata = data_10), na.rm = TRUE)
     
     # Difference
     inf_abx <- ybar_11 - ybar_10
@@ -377,6 +320,7 @@ abx_growth_gcomp <- function(data,
 #' @param site_interaction TRUE or FALSE indicating interaction between site and antibiotics 
 #' @param age_var_name name of age covariate in dataset (if applicable, else NULL)
 #' @param outcome_type gaussian or binomial for continuous or binomial outcome
+#' @param att boolean if effect should be estimated among people who would naturally get infection, default TRUE
 #' 
 #' @import splines
 #' @export
@@ -411,9 +355,10 @@ abx_growth_gcomp_case_control <- function(data,
                              site_var_name = "enroll_site",
                              site_interaction = TRUE,
                              age_var_name = "enr_age_months",
-                             outcome_type = "gaussian"){
+                             outcome_type = "gaussian",
+                             att = TRUE){
   
-  # Estimands of interest:
+  # Estimands of interest: (!ATT)
   # E[Growth(Shigella diar = 1, Antibiotics = a) - Growth(Shigella diar = 0) | control ] = 
   #    E[ E [ Growth | Shigella diar = 1, Antibiotics = a, severity, baseline] | Shigella diar = 1, baseline ] | control ] -
   #    E[ Growth | control ]
@@ -488,15 +433,19 @@ abx_growth_gcomp_case_control <- function(data,
   data_01[[abx_var_name]] <- 0
   yhat_01 <- stats::predict(model_1_case, newdata = data_01, type = "response")
 
-  # Regress yhat_01 on all other non-mediating variables 
-  case_data$yhat_01 <- yhat_01
-
-  model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list, collapse = "+"))),
-                       data = case_data,
-                       family = outcome_type)
-
-  # Predict from model2 on controls
-  ybar_01 <- mean(stats::predict(model2, newdata = control_data, type = "response"), na.rm = TRUE)
+  if(!att){
+    # Regress yhat_01 on all other non-mediating variables 
+    case_data$yhat_01 <- yhat_01
+    
+    model2 <- stats::glm(stats::as.formula(paste("yhat_01", "~", paste(covariate_list, collapse = "+"))),
+                         data = case_data,
+                         family = outcome_type)
+    
+    # Predict from model2 on controls
+    ybar_01 <- mean(stats::predict(model2, newdata = control_data, type = "response"), na.rm = TRUE)
+  } else {
+    ybar_01 <- mean(yhat_01, na.rm = TRUE)
+  }
   
   # stats::predict from model1 setting infection = 1 and abx = 1, call that yhat_11
   data_11 <- case_data
@@ -504,21 +453,47 @@ abx_growth_gcomp_case_control <- function(data,
 
   yhat_11 <- stats::predict(model_1_case, newdata = data_11, type = "response")
 
-  # Regress yhat_11 on all other non-mediating variables, call this model4
-  case_data$yhat_11 <- yhat_11
-
-  model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
-                       data = case_data,
-                       family = outcome_type)
-
-  # stats::predict from model4 on controls, average stats::predictions, call avg ybar_11
-  ybar_11 <- mean(stats::predict(model4, newdata = control_data, type = "response"), na.rm = TRUE)
-
-  # ------------------------------------------------------------
-  # Part 2: E[Growth | Control]
-  # ------------------------------------------------------------
+  if(!att){
+    # Regress yhat_11 on all other non-mediating variables, call this model4
+    case_data$yhat_11 <- yhat_11
+    
+    model4 <- stats::glm(stats::as.formula(paste("yhat_11", "~", paste(covariate_list, collapse = "+"))),
+                         data = case_data,
+                         family = outcome_type)
+    
+    # stats::predict from model4 on controls, average stats::predictions, call avg ybar_11
+    ybar_11 <- mean(stats::predict(model4, newdata = control_data, type = "response"), na.rm = TRUE)
+  } else{
+    ybar_11 <- mean(yhat_11, na.rm = TRUE)
+  }
   
-  ybar_00 <- mean(control_data[[laz_var_name]], na.rm = TRUE)
+  # ------------------------------------------------------------
+  # Part 2: E[Growth | Control] 
+  # ------------------------------------------------------------
+  if(!att){
+    ybar_00 <- mean(control_data[[laz_var_name]], na.rm = TRUE)
+  }else{
+    # fit model of laz_var_name ~ covariate_list in the controls
+    # predict from model in cases, avg predictions
+    
+    # NOTE WE THINK LISTS SHOULD BE THE SAME NOW (NOT ADJUSTING FOR SEVERITY)
+    # REMOVE SEPARATE COVARIATE LIST FROM INPUTS (after checking with liz)
+    model_1_formula_control <- stats::as.formula(
+      paste(laz_var_name, "~",
+            paste(covariate_list, collapse = "+"))
+    )
+    
+    # Regress LAZ on covariates
+    model_1_control <- stats::glm(model_1_formula_control,
+                                  data = control_data,
+                                  family = outcome_type)
+    
+    yhat_00 <- stats::predict(model_1_control,
+                              newdata = case_data,
+                              type = "response")
+    
+    ybar_00 <- mean(yhat_00, na.rm = TRUE)
+  }
   
   # -----------------------------------------------------------
   # Part 3: Take difference to get estimands of interest

@@ -16,7 +16,8 @@ abx_growth_gcomp_case_control(
   site_var_name = "enroll_site",
   site_interaction = TRUE,
   age_var_name = "enr_age_months",
-  outcome_type = "gaussian"
+  outcome_type = "gaussian",
+  att = TRUE
 )
 }
 \arguments{
@@ -41,6 +42,8 @@ abx_growth_gcomp_case_control(
 \item{age_var_name}{name of age covariate in dataset (if applicable, else NULL)}
 
 \item{outcome_type}{gaussian or binomial for continuous or binomial outcome}
+
+\item{att}{boolean if effect should be estimated among people who would naturally get infection, default TRUE}
 }
 \value{
 \describe{

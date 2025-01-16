@@ -18,7 +18,8 @@ bootstrap_estimates(
   case_var_name = NULL,
   case_control = FALSE,
   covariate_list_control = NULL,
-  outcome_type = "gaussian"
+  outcome_type = "gaussian",
+  att = TRUE
 )
 }
 \arguments{
@@ -49,6 +50,8 @@ bootstrap_estimates(
 \item{covariate_list_control}{covariate list for controls in case-control analysis, if not case control or covariate lists same then NULL}
 
 \item{outcome_type}{gaussian or binomial for continuous or binomial outcome}
+
+\item{att}{boolean if effect should be estimated among people who would naturally get infection, default TRUE}
 }
 \value{
 \describe{

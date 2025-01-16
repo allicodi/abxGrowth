@@ -15,6 +15,7 @@
 #' @param case_var_name name of variable indicating case (only needed if case_control = TRUE)
 #' @param covariate_list_control covariate list for controls in case-control analysis, if not case control or covariate lists same then NULL
 #' @param outcome_type gaussian or binomial for continuous or binomial outcome
+#' @param att boolean if effect should be estimated among people who would naturally get infection, default TRUE
 #' 
 #' @export
 #' 
@@ -33,7 +34,8 @@ aggcomp <- function(data,
                     infection_var_name = NULL,
                     case_var_name = "case",
                     covariate_list_control = NULL,
-                    outcome_type = "gaussian"){
+                    outcome_type = "gaussian",
+                    att = TRUE){
   
   # set seed
   set.seed(seed)
@@ -49,7 +51,8 @@ aggcomp <- function(data,
                                age_var_name = age_var_name, 
                                covariate_list = covariate_list,
                                severity_list = severity_list,
-                               outcome_type = outcome_type)
+                               outcome_type = outcome_type,
+                               att = att)
     
     # Get standard error and confidence intervals for those point estimates
     bootstrap_results <- bootstrap_estimates(data = data, 
@@ -61,7 +64,8 @@ aggcomp <- function(data,
                                              age_var_name = age_var_name, 
                                              covariate_list = covariate_list,
                                              severity_list = severity_list,
-                                             n_boot = n_boot)
+                                             n_boot = n_boot,
+                                             att = att)
     
     # Return list of all point estimates and standard errors
     # Class `aggcomp_res`
@@ -90,7 +94,8 @@ aggcomp <- function(data,
                                             site_var_name = site_var_name,
                                             site_interaction = site_interaction, 
                                             age_var_name = age_var_name, 
-                                            outcome_type = outcome_type)
+                                            outcome_type = outcome_type,
+                                            att = att)
     
     bootstrap_results <- bootstrap_estimates(data, 
                                              laz_var_name = laz_var_name,
@@ -104,7 +109,8 @@ aggcomp <- function(data,
                                              case_var_name = case_var_name,
                                              case_control = case_control,
                                              covariate_list_control = covariate_list_control, 
-                                             outcome_type = outcome_type)
+                                             outcome_type = outcome_type,
+                                             att = att)
     
     # Return list of all point estimates and standard errors
     # Class `aggcomp_res`
