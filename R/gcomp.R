@@ -288,7 +288,7 @@ abx_growth_gcomp <- function(data,
       ybar_10 <- mean(stats::predict(model_1, newdata = data_10, type = "response"), na.rm = TRUE)
     } else{
       data$yhat_10 <- stats::predict(model_1, newdata = data_10, type = "response")
-      ybar_10 <- mean(data$yhat_10, na.rm = TRUE)
+      ybar_10 <- mean(data$yhat_10[data[[infection_var_name]] == 1], na.rm = TRUE)
     }
     
     # Difference
@@ -476,11 +476,10 @@ abx_growth_gcomp_case_control <- function(data,
     # fit model of laz_var_name ~ covariate_list in the controls
     # predict from model in cases, avg predictions
     
-    # NOTE WE THINK LISTS SHOULD BE THE SAME NOW (NOT ADJUSTING FOR SEVERITY)
-    # REMOVE SEPARATE COVARIATE LIST FROM INPUTS (after checking with liz)
+    # NOTE in this case covariate lists should be the same but leave as option
     model_1_formula_control <- stats::as.formula(
       paste(laz_var_name, "~",
-            paste(covariate_list, collapse = "+"))
+            paste(covariate_list_control, collapse = "+"))
     )
     
     # Regress LAZ on covariates
