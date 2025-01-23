@@ -228,6 +228,14 @@ bootstrap_estimates <- function(data,
                                                outcome_type = outcome_type,
                                                att = att), simplify = FALSE) 
   
+  # Extract the coefs
+  coef_vecs <- lapply(boot_estimates, function(x) x[['outcome_coefs']])
+  ses_vecs <- lapply(boot_estimates, function(x) x[['ses_coefs']])
+  
+  # Combine the numeric vectors into a single dataframe
+  coefs_df <- data.frame(do.call(rbind, coef_vecs))
+  ses_df <- data.frame(do.call(rbind, ses_vecs))
+  
   boot_res <- data.frame(do.call(rbind, boot_estimates))
   boot_res$effect_inf_no_abx <- unlist(boot_res$effect_inf_no_abx)
   boot_res$effect_inf_abx <- unlist(boot_res$effect_inf_abx)
