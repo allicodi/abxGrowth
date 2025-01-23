@@ -91,8 +91,8 @@ one_boot <- function(data,
     # TODO make more generalizable, go back and have these as inputs
     
     unique_first_id <- unique(data$first_id[data$case == 1])        # unique children who are cases in the study to sample from
-    n_children <- length(unique_first_id)           # number of unique cases in the study to sample
-    i <- 0                                                           # counter for number of children to sample
+    n_children <- length(unique_first_id)                           # number of unique cases in the study to sample
+    i <- 0                                                          # counter for number of CASES to sample
     
     # ---------------------------------------------------------------
     # Helper function for child-level bootstrap sampling
@@ -134,7 +134,10 @@ one_boot <- function(data,
       boot_data <- rbind(boot_data, sampled_rows)
       
       # Add number of sampled children to children counter
-      i <- i + length(unique(sampled_rows$first_id))
+      # i <- i + length(unique(sampled_rows$first_id))
+      
+      # Add number of sampled CASES to CASES counter
+      i <- i + nrow(sampled_rows[sampled_rows[[case_var_name]] == 1,])
     }
     
     boot_res <- abx_growth_gcomp_case_control(data = boot_data,
