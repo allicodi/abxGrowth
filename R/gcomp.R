@@ -429,11 +429,6 @@ abx_growth_gcomp_case_control <- function(data,
                         data = case_data,
                         family = outcome_type)
   
-  # TEMP DEBUGGING
-  # Get coefficients for outcome model
-  coef_vec <- coef(model_1_case)
-  se_vec <- sqrt(diag(vcov(model_1_case)))
-
   # Predict from model setting abx = 0
   data_01 <- case_data
   data_01[[abx_var_name]] <- 0
@@ -514,8 +509,6 @@ abx_growth_gcomp_case_control <- function(data,
               effect_inf_abx = effect_abx,
               abx_0_inf_1 = ybar_01,
               abx_0_inf_0 = ybar_00,
-              abx_1_inf_1 = ybar_11,
-              outcome_coefs = coef_vec,
-              outcome_ses = se_vec))
+              abx_1_inf_1 = ybar_11))
 }
 
