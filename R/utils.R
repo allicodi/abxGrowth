@@ -749,7 +749,7 @@ impute_covariates <- function(data,
     
     if(imp_by_site == TRUE){
       
-      if(is.factor(data[[cov_name]]) | all(unique(data[[cov_name]]) %in% c(0,1))){
+      if(is.factor(data[[cov_name]]) | all(unique(data[[cov_name]]) %in% c(0,1, NA))){
         # Binary var or factor 
         
         # Get mode for each site
