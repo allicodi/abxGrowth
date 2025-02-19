@@ -202,7 +202,9 @@ one_hot_encode <- function(data,
   # Apply one-hot encoding to the relevant columns
   one_hot_data <- fastDummies::dummy_cols(data,
                                           select_columns = colnames(data)[
-                                            !(colnames(data) %in% c(id_var_name, "child_id")) &
+                                            !(colnames(data) %in% c(id_var_name, "child_id", 
+                                                                    "sid", "first_id", "case_pid", 
+                                                                    "case_id", "case_sid")) &
                                               (sapply(data, is.character) | sapply(data, is.factor))
                                           ],
                                           remove_first_dummy = FALSE,
@@ -718,3 +720,71 @@ plot_cis_subplots <- function(results,
   
   return(combined_plot)
 }
+
+#' Helper function to impute select covariates with mean or mode
+#' 
+#' @param data dataset to impute
+#' @param imp_covariates list of covariates to be imputed
+#' @param site_var_name name of site variable if imputing by site
+#' @param imp_by_site boolean indicating if imputing by site, default true
+#' 
+#' @export
+#' 
+#' @return dataframe with imputed data and flag columns indicating imputed values
+impute_covariates <- function(data,
+                              imp_covariates,
+                              site_var_name = "site",
+                              imp_by_site = TRUE){
+  
+  mode_fn <- function(x) {
+    x <- na.omit(x)
+    ux <- unique(x)
+    ux[which.max(tabulate(match(x, ux)))]
+  }
+  
+  for(cov_name in imp_covariates){
+    
+    imputed_flag_name <- paste0(cov_name, "_imputed")
+    data[[imputed_flag_name]] <- ifelse(is.na(data[[cov_name]]), 1, 0)
+    
+    if(imp_by_site == TRUE){
+      
+      if(is.factor(data[[cov_name]]) | all(unique(data[[cov_name]]) %in% c(0,1))){
+        # Binary var or factor 
+        
+        # Get mode for each site
+        site_modes <- data %>%
+          group_by(!!sym(site_var_name)) %>%
+          summarise(mode = mode_fn(!!sym(cov_name)))
+        
+        data <- data %>%
+          left_join(site_modes, by = site_var_name) %>%
+          mutate(!!cov_name := if_else(is.na(!!sym(cov_name)), mode, !!sym(cov_name))) %>%
+          select(-mode)
+        
+      } else {
+        # Continuous var
+        site_means <- data %>%
+          group_by(!!sym(site_var_name)) %>%
+          summarise(site_mean = mean(!!sym(cov_name), na.rm = TRUE))
+        
+        # replace with site specific mean
+        data <- data %>%
+          left_join(site_means, by = site_var_name) %>%
+          mutate(!!cov_name := if_else(is.na(!!sym(cov_name)), site_mean, !!sym(cov_name))) %>%
+          select(-site_mean)
+        
+      }
+      
+    } else{
+
+     exit("implement non- site-specific version later")
+      
+    }
+    
+  }
+  
+  return(data)
+  
+}
+  
