@@ -232,53 +232,54 @@ bootstrap_estimates <- function(data,
                                                att = att), simplify = FALSE) 
   
   # Extract the coefs
-  coef_vecs <- lapply(boot_estimates, function(x) x[['outcome_coefs']])
-  ses_vecs <- lapply(boot_estimates, function(x) x[['ses_coefs']])
-  
-  # Combine the numeric vectors into a single dataframe
-  coefs_df <- data.frame(do.call(rbind, coef_vecs))
-  ses_df <- data.frame(do.call(rbind, ses_vecs))
-  
+  # coef_vecs <- lapply(boot_estimates, function(x) x[['outcome_coefs']])
+  # ses_vecs <- lapply(boot_estimates, function(x) x[['ses_coefs']])
+  # 
+  # # Combine the numeric vectors into a single dataframe
+  # coefs_df <- data.frame(do.call(rbind, coef_vecs))
+  # ses_df <- data.frame(do.call(rbind, ses_vecs))
+  # 
   boot_res <- data.frame(do.call(rbind, boot_estimates))
-  boot_res$effect_inf_no_abx <- unlist(boot_res$effect_inf_no_abx)
-  boot_res$effect_inf_abx <- unlist(boot_res$effect_inf_abx)
-  boot_res$abx_0_inf_1 <- unlist(boot_res$abx_0_inf_1)
-  boot_res$abx_0_inf_0 <- unlist(boot_res$abx_0_inf_0)
-  boot_res$abx_1_inf_1 <- unlist(boot_res$abx_1_inf_1)
   
-  if(case_control == FALSE){
-    boot_res$abx_1_inf_0 <- unlist(boot_res$abx_1_inf_0)
+  abx_levels <- unique(boot_res$abx_levels)
+  
+  # Make list for output with entry for each abx level
+  out <- vector("list", length = length(abx_levels))
+  names(out) <- paste0("Abx = ", abx_levels)
+  
+  for(i in 1:length(abx_levels)){
+    abx_level <- abx_levels[i]
+    
+    sub_boot_res <- boot_res[boot_res$abx_levels == abx_level,]
+    
+    out[[i]]$abx_level <- abx_level
+    
+    if(case_control == FALSE){
+      out[[i]]$se_abx_level_inf_1 <- stats::sd(sub_boot_res$abx_level_inf_1)
+      out[[i]]$lower_ci_abx_level_inf_1 <- stats::quantile(sub_boot_res$abx_level_inf_1, p = 0.025, names = FALSE)
+      out[[i]]$upper_ci_abx_level_inf_1 <- stats::quantile(sub_boot_res$abx_level_inf_1, p = 0.975, names = FALSE)
+      
+      out[[i]]$se_abx_level_inf_0 <- stats::sd(sub_boot_res$abx_level_inf_0)
+      out[[i]]$lower_ci_abx_level_inf_0 <- stats::quantile(sub_boot_res$abx_level_inf_0, p = 0.025, names = FALSE)
+      out[[i]]$upper_ci_abx_level_inf_0 <- stats::quantile(sub_boot_res$abx_level_inf_0, p = 0.975, names = FALSE)
+      
+    } else{
+      
+      out[[i]]$se_abx_level_case <- stats::sd(sub_boot_res$abx_level_case)
+      out[[i]]$lower_ci_abx_level_case <- stats::quantile(sub_boot_res$abx_level_case, p = 0.025, names = FALSE)
+      out[[i]]$upper_ci_abx_level_case <- stats::quantile(sub_boot_res$abx_level_case, p = 0.975, names = FALSE)
+      
+      out[[i]]$se_abx_level_control <- stats::sd(sub_boot_res$abx_level_control)
+      out[[i]]$lower_ci_abx_level_control <- stats::quantile(sub_boot_res$abx_level_control, p = 0.025, names = FALSE)
+      out[[i]]$upper_ci_abx_level_control <- stats::quantile(sub_boot_res$abx_level_control, p = 0.975, names = FALSE)
+
+    }
+    
+    out[[i]]$se_effect_inf_abx_level <- stats::sd(sub_boot_res$effect_inf_abx_level)
+    out[[i]]$lower_ci_effect_inf_abx_level<- stats::quantile(sub_boot_res$effect_inf_abx_level, p = 0.025, names = FALSE)
+    out[[i]]$upper_ci_effect_inf_abx_level <- stats::quantile(sub_boot_res$effect_inf_abx_level, p = 0.975, names = FALSE)
+    
   }
-  
-  out <- list()
-  
-  # Get standard error and confidence intervals for each effect 
-  
-  out$se_abx <- stats::sd(boot_res$effect_inf_abx)
-  out$lower_ci_abx <- stats::quantile(boot_res$effect_inf_abx, p = 0.025, names = FALSE)
-  out$upper_ci_abx <- stats::quantile(boot_res$effect_inf_abx, p = 0.975, names = FALSE)
-  
-  out$se_no_abx <- stats::sd(boot_res$effect_inf_no_abx)
-  out$lower_ci_no_abx <- stats::quantile(boot_res$effect_inf_no_abx, p = 0.025, names = FALSE)
-  out$upper_ci_no_abx <- stats::quantile(boot_res$effect_inf_no_abx, p = 0.975, names = FALSE)
-  
-  if(case_control == FALSE){
-    out$se_abx_1_inf_0 <- stats::sd(boot_res$abx_1_inf_0)
-    out$lower_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.025, names = FALSE)
-    out$upper_ci_abx_1_inf_0 <- stats::quantile(boot_res$abx_1_inf_0, p = 0.975, names = FALSE)
-  }
-  
-  out$se_abx_0_inf_1 <- stats::sd(boot_res$abx_0_inf_1)
-  out$lower_ci_abx_0_inf_1 <- stats::quantile(boot_res$abx_0_inf_1, p = 0.025, names = FALSE)
-  out$upper_ci_abx_0_inf_1 <- stats::quantile(boot_res$abx_0_inf_1, p = 0.975, names = FALSE)
-  
-  out$se_abx_0_inf_0 <- stats::sd(boot_res$abx_0_inf_0)
-  out$lower_ci_abx_0_inf_0 <- stats::quantile(boot_res$abx_0_inf_0, p = 0.025, names = FALSE)
-  out$upper_ci_abx_0_inf_0 <- stats::quantile(boot_res$abx_0_inf_0, p = 0.975, names = FALSE)
-  
-  out$se_abx_1_inf_1 <- stats::sd(boot_res$abx_1_inf_1)
-  out$lower_ci_abx_1_inf_1 <- stats::quantile(boot_res$abx_1_inf_1, p = 0.025, names = FALSE)
-  out$upper_ci_abx_1_inf_1 <- stats::quantile(boot_res$abx_1_inf_1, p = 0.975, names = FALSE)
   
   return(out)
 }

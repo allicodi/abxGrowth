@@ -47,7 +47,7 @@ print.aggcomp_res <- function(x, ...){
     
     # Print header with dashed line
     cat(paste("                                       Effect of ", x$parameters$case_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
-    cat(paste(rep("-", 145), collapse = ""), "\n")
+    cat(paste(rep("-", 155), collapse = ""), "\n")
     cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
     cat(paste(rep("-", 145), collapse = ""), "\n")
     
@@ -72,44 +72,40 @@ print.aggcomp_res <- function(x, ...){
   
   } else{
   
-    row_names <- c("E[Growth | Infection = 1, Abx = 0]",
-                   "E[Growth | Infection = 0, Abx = 0]",
-                   "Effect of infection in no antibiotics subgroup",
-                   "E[Growth | Infection = 1, Abx = 1]",
-                   "E[Growth | Infection = 0, Abx = 1]", 
-                   "Effect of infection in antibiotics subgroup")
+    row_names <- c()
+    
+    for(i in 1:length(res$bootstrap_results)){
+      name_inf_1 <- paste0("E[Growth | Infection = 1, ", names(res$bootstrap_results[i]), "]")
+      name_inf_0 <- paste0("E[Growth | Infection = 0, ", names(res$bootstrap_results[i]), "]")
+      name_effect <- paste0("Effect of infection in ", names(res$bootstrap_results[i]), " subgroup")
+      
+      row_names <- c(row_names, name_inf_1, name_inf_0, name_effect)
+    }
     
     col_names <- c("Estimate", "Standard Error", "95% CI: Lower", "95% CI: Upper")
     
-    tmp <- data.frame(
-      c(res["abx_0_inf_1"],
-        res["abx_0_inf_0"],
-        res["effect_inf_no_abx"],
-        res["abx_1_inf_1"],
-        res["abx_1_inf_0"],
-        res["effect_inf_abx"]),
-      c(res["se_abx_0_inf_1"],
-        res["se_abx_0_inf_0"],
-        res["se_no_abx"],
-        res["se_abx_1_inf_1"],
-        res["se_abx_1_inf_0"],
-        res["se_abx"]),
-      c(res["lower_ci_abx_0_inf_1"],
-        res["lower_ci_abx_0_inf_0"],
-        res["lower_ci_no_abx"],
-        res["lower_ci_abx_1_inf_1"],
-        res["lower_ci_abx_1_inf_0"],
-        res["lower_ci_abx"]),
-      c(res["upper_ci_abx_0_inf_1"],
-        res["upper_ci_abx_0_inf_0"],
-        res["upper_ci_no_abx"],
-        res["upper_ci_abx_1_inf_1"],
-        res["upper_ci_abx_1_inf_0"],
-        res["upper_ci_abx"])
-    )
+    res_df <- data.frame()
+    for(i in 1:length(res$bootstrap_results)){
+      abx_level <- res$bootstrap_results[[i]]$abx_level
+      
+      tmp <- data.frame(c(res$pt_est$abx_level_inf_1[res$pt_est$abx_levels == abx_level],
+                          res$pt_est$abx_level_inf_0[res$pt_est$abx_levels == abx_level],
+                          res$pt_est$effect_inf_abx_level[res$pt_est$abx_levels == abx_level]),
+                        c(res$bootstrap_results[[i]]$se_abx_level_inf_1,
+                          res$bootstrap_results[[i]]$se_abx_level_inf_0,
+                          res$bootstrap_results[[i]]$se_effect_inf_abx_level),
+                        c(res$bootstrap_results[[i]]$lower_ci_abx_level_inf_1,
+                          res$bootstrap_results[[i]]$lower_ci_abx_level_inf_0,
+                          res$bootstrap_results[[i]]$lower_ci_effect_inf_abx_level),
+                        c(res$bootstrap_results[[i]]$upper_ci_abx_level_inf_1,
+                          res$bootstrap_results[[i]]$upper_ci_abx_level_inf_0,
+                          res$bootstrap_results[[i]]$upper_ci_effect_inf_abx_level))
+      
+      res_df <- rbind(res_df, tmp)
+    }
     
-    colnames(tmp) <- col_names
-    rownames(tmp) <- row_names
+    colnames(res_df) <- col_names
+    rownames(res_df) <- row_names
     
     # Print header with dashed line
     cat(paste("                           Effect of ", x$parameters$infection_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups \n"))
@@ -117,8 +113,8 @@ print.aggcomp_res <- function(x, ...){
     cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
     cat(paste(rep("-", 135), collapse = ""), "\n")
     
-    for(i in 1:nrow(tmp)){
-      row_to_print <- tmp[i, ]
+    for(i in 1:nrow(res_df)){
+      row_to_print <- res_df[i, ]
       
       # Adjust the widths as needed
       formatted_row <- sprintf("%-70s%-20s%-20s%-20s%-20s\n",
@@ -138,7 +134,7 @@ print.aggcomp_res <- function(x, ...){
     
   }
   
-  invisible(tmp)
+  invisible(res_df)
   
 }
 
@@ -202,7 +198,7 @@ one_hot_encode <- function(data,
   # Apply one-hot encoding to the relevant columns
   one_hot_data <- fastDummies::dummy_cols(data,
                                           select_columns = colnames(data)[
-                                            !(colnames(data) %in% c(id_var_name, "child_id", 
+                                            !(colnames(data) %in% c(id_var_name, abx_var_name, "child_id", 
                                                                     "sid", "first_id", "case_pid", 
                                                                     "case_id", "case_sid")) &
                                               (sapply(data, is.character) | sapply(data, is.factor))

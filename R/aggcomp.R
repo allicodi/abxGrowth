@@ -69,10 +69,10 @@ aggcomp <- function(data,
     
     # Return list of all point estimates and standard errors
     # Class `aggcomp_res`
-    results <- c(unlist(pt_est), 
-                 unlist(bootstrap_results))
+    results <- list(pt_est = pt_est,
+                    bootstrap_results = bootstrap_results)
     
-    class(results) <- 'diarrhea_comp_res'
+    class(results) <- 'other_diarrhea_res'
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,
@@ -114,8 +114,8 @@ aggcomp <- function(data,
     
     # Return list of all point estimates and standard errors
     # Class `aggcomp_res`
-    results <- c(unlist(pt_est), 
-                 unlist(bootstrap_results))
+    results <- list(pt_est = pt_est,
+                    bootstrap_results = bootstrap_results)
     
     class(results) <- 'case_control_res'
     
@@ -139,6 +139,4 @@ aggcomp <- function(data,
   return(aggcomp_results)
   
 }
-
-
 
