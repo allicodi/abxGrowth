@@ -727,6 +727,7 @@ plot_cis_subplots <- function(results,
 #' @param imp_covariates list of covariates to be imputed
 #' @param site_var_name name of site variable if imputing by site
 #' @param imp_by_site boolean indicating if imputing by site, default true
+#' @param mode_for_binary use mode imputation for binary 0,1 variables
 #' 
 #' @export
 #' 
@@ -734,7 +735,8 @@ plot_cis_subplots <- function(results,
 impute_covariates <- function(data,
                               imp_covariates,
                               site_var_name = "site",
-                              imp_by_site = TRUE){
+                              imp_by_site = TRUE,
+                              mode_for_binary = FALSE){
   
   mode_fn <- function(x) {
     x <- na.omit(x)
@@ -749,7 +751,7 @@ impute_covariates <- function(data,
     
     if(imp_by_site == TRUE){
       
-      if(is.factor(data[[cov_name]]) | all(unique(data[[cov_name]]) %in% c(0,1, NA))){
+      if(is.factor(data[[cov_name]]) | (all(unique(data[[cov_name]]) %in% c(0,1, NA)) & mode_for_binary)){
         # Binary var or factor 
         
         # Get mode for each site

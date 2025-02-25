@@ -8,7 +8,8 @@ impute_covariates(
   data,
   imp_covariates,
   site_var_name = "site",
-  imp_by_site = TRUE
+  imp_by_site = TRUE,
+  mode_for_binary = FALSE
 )
 }
 \arguments{
@@ -19,6 +20,8 @@ impute_covariates(
 \item{site_var_name}{name of site variable if imputing by site}
 
 \item{imp_by_site}{boolean indicating if imputing by site, default true}
+
+\item{mode_for_binary}{use mode imputation for binary 0,1 variables}
 }
 \value{
 dataframe with imputed data and flag columns indicating imputed values
