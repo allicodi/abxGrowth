@@ -398,7 +398,7 @@ abx_growth_gcomp_case_control <- function(data,
       # Predict from model2 on controls
       ybar_abx_level <- mean(stats::predict(model2, newdata = control_data, type = "response"), na.rm = TRUE)
     } else {
-      ybar_abx_level <- mean(ybar_abx_level, na.rm = TRUE)
+      ybar_abx_level <- mean(yhat_abx_level, na.rm = TRUE)
     }
     
     results_df[i,"abx_level_case"] <- ybar_abx_level

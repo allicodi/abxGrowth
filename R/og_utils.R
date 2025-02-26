@@ -11,72 +11,51 @@ print.aggcomp_res <- function(x, ...){
   res <- x$results
   
   if(class(res) == "case_control_res"){
-    
-    row_names <- c()
-    
-    for(i in 1:length(res$bootstrap_results)){
-      name_inf <- paste0("E[Growth | Infection = 1, ", names(res$bootstrap_results[i]), "]")
-      row_names <- c(row_names, name_inf)
-    }
-    
-    row_names <- c(row_names, paste0("E[Growth | Healthy Control]"))
-    
-    for(i in 1:length(res$bootstrap_results)){
-      name_effect <- paste0("Effect of case treated with ", names(res$bootstrap_results[i]), " vs healthy control")
-      row_names <- c(row_names, name_effect)
-    }
+    row_names <- c("E[Growth | Infection = 1, Abx = 0]",
+                   "E[Growth | Infection = 1, Abx = 1]",
+                   "E[Growth | Healthy Control]",
+                   "Effect of case not treated with antibiotics vs healthy control",
+                   "Effect of case treated with antibiotics vs healthy control")
     
     col_names <- c("Estimate", "Standard Error", "95% CI: Lower", "95% CI: Upper")
     
-    res_df <- data.frame()
+    tmp <- data.frame(
+      c(res["abx_0_inf_1"],
+        res["abx_1_inf_1"],
+        res["abx_0_inf_0"],
+        res["effect_inf_no_abx"],
+        res["effect_inf_abx"]),
+      c(res["se_abx_0_inf_1"],
+        res["se_abx_1_inf_1"],
+        res["se_abx_0_inf_0"],
+        res["se_no_abx"],
+        res["se_abx"]),
+      c(res["lower_ci_abx_0_inf_1"],
+        res["lower_ci_abx_1_inf_1"],
+        res["lower_ci_abx_0_inf_0"],
+        res["lower_ci_no_abx"],
+        res["lower_ci_abx"]),
+      c(res["upper_ci_abx_0_inf_1"],
+        res["upper_ci_abx_1_inf_1"],
+        res["upper_ci_abx_0_inf_0"],
+        res["upper_ci_no_abx"],
+        res["upper_ci_abx"])
+    )
     
-    # Add results for E[Growth | Infection = 1, Abx = abx_level]
-    for(i in 1:length(res$bootstrap_results)){
-      abx_level <- res$bootstrap_results[[i]]$abx_level
-      
-      tmp <- data.frame(res$pt_est$abx_level_case[res$pt_est$abx_levels == abx_level],
-                        res$bootstrap_results[[i]]$se_abx_level_case,
-                        res$bootstrap_results[[i]]$lower_ci_abx_level_case,
-                        res$bootstrap_results[[i]]$upper_ci_abx_level_case)
-      res_df <- rbind(res_df, tmp)
-
-    }
-    
-    # Add results for E[Growth | Control]
-    control_res <- data.frame(res$pt_est$abx_level_control[1],
-                              res$bootstrap_results[[1]]$se_abx_level_control,
-                              res$bootstrap_results[[1]]$lower_ci_abx_level_control,
-                              res$bootstrap_results[[1]]$upper_ci_abx_level_control)
-    res_df <- rbind(as.matrix(res_df), as.matrix(control_res))
-    
-    # Add results for effects
-    for(i in 1:length(res$bootstrap_results)){
-      abx_level <- res$bootstrap_results[[i]]$abx_level
-      
-      tmp <- data.frame(res$pt_est$effect_inf_abx_level[res$pt_est$abx_levels == abx_level],
-                        res$bootstrap_results[[i]]$se_effect_inf_abx_level,
-                        res$bootstrap_results[[i]]$lower_ci_effect_inf_abx_level,
-                        res$bootstrap_results[[i]]$upper_ci_effect_inf_abx_level)
-      
-      res_df <- rbind(as.matrix(res_df), as.matrix(tmp))
-      
-    }
-    
-    res_df <- data.frame(res_df)
-    colnames(res_df) <- col_names
-    rownames(res_df) <- row_names
+    colnames(tmp) <- col_names
+    rownames(tmp) <- row_names
     
     # Print header with dashed line
-    cat(paste("                                                  Effect of ", x$parameters$case_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
-    cat(paste(rep("-", 165), collapse = ""), "\n")
-    cat(sprintf("%-90s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
-    cat(paste(rep("-", 165), collapse = ""), "\n")
+    cat(paste("                                       Effect of ", x$parameters$case_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
+    cat(paste(rep("-", 155), collapse = ""), "\n")
+    cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
+    cat(paste(rep("-", 145), collapse = ""), "\n")
     
-    for(i in 1:nrow(res_df)){
-      row_to_print <- res_df[i, ]
+    for(i in 1:nrow(tmp)){
+      row_to_print <- tmp[i, ]
       
       # Adjust the widths as needed
-      formatted_row <- sprintf("%-90s%-20s%-20s%-20s%-20s\n",
+      formatted_row <- sprintf("%-70s%-20s%-20s%-20s%-20s\n",
                                row.names(row_to_print),
                                round(row_to_print[1],4),
                                round(row_to_print[2],4),
@@ -88,8 +67,8 @@ print.aggcomp_res <- function(x, ...){
       
     }
     
-    cat(paste("\nNon-mediating covariates: ", paste(x$parameters$covariate_list, collapse = ", ")))
-    cat(paste("\nSeverity related covariates: ", paste(x$parameters$severity_list, collapse = ", "), "\n"))
+    cat(paste("\nNon-mediating covariates in cases: ", paste(x$parameters$covariate_list, collapse = ", ")))
+    cat(paste("\nSeverity related covariates in cases: ", paste(x$parameters$severity_list, collapse = ", "), "\n"))
   
   } else{
   
