@@ -51,6 +51,7 @@ abx_growth_gcomp <- function(data,
                              outcome_type = "gaussian",
                              sl.library.outcome = NULL, 
                              sl.library.treatment = NULL,
+                             sl.library.infection = NULL,
                              sl.library.missingness = NULL,
                              v_folds = 5,
                              att = TRUE,
@@ -63,9 +64,6 @@ abx_growth_gcomp <- function(data,
     # -----------------------------------
     
     ### STEP 0: Create subsets of data for model fitting
-    
-    # will use to merge later
-    data$idx <- 1:nrow(data)
     
     ## Subset 0a: subset shigella (or other infection variable) attr cases
     sub_inf_attr <- data[which(data[[infection_var_name]] == 1),]
@@ -115,7 +113,6 @@ abx_growth_gcomp <- function(data,
     ### STEP 1: Fit outcome models
     
     ## Model 1a: Outcome model in Shigella (or other infection) attributable cases
-    # QUESTION should this be outcome type or gaussian?? thesis pseudo-outcome always continuous? but that was dr-learner
     outcome_model_1a <- SuperLearner::SuperLearner(Y = Y_inf_attr_complete, 
                                                    X = data.frame(abx_inf_attr_complete,
                                                                   covariates_inf_attr_complete, 
@@ -139,110 +136,57 @@ abx_growth_gcomp <- function(data,
     
     # For each level of abx, predict setting abx = x, infection = 1 & abx = x, infection = 0
     abx_levels <- unique(data[[abx_var_name]])[!is.na(unique(data[[abx_var_name]]))]
-    results_df <- data.frame(abx_levels = abx_levels,
-                             abx_level_inf_1 = vector("numeric", length = length(abx_levels)),
-                             abx_level_inf_0 = vector("numeric", length = length(abx_levels)),
-                             effect_inf_abx_level = vector("numeric", length = length(abx_levels)))
     
     outcome_vectors_1a <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
     outcome_vectors_1b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
     outcome_vectors_2b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
     
     # Iterate through each abx level
-    for(i in 1:length(abx_levels)){
+    for (i in 1:length(abx_levels)) {
       abx_level <- abx_levels[i]
-      
-      ## 2a: Predictions for infection = 1 (no 2nd stage model needed)
-      #data_level_1 <- data
-      #data_level_1[[infection_var_name]] <- 1
-      #data_level_1[[abx_var_name]] <- abx_level
-    
-      # QUESTION should this not be setting to 1?? predictions needed by AIPW supposed to be for everybody? so this is different than what's needed for AIPW?
-      #yhat_level_1 <- stats::predict(outcome_model_1a, newdata = data_level_1, type = "response")
       
       data_abx <- data
       data_abx[[abx_var_name]] <- abx_level
-      outcome_vectors_1a[,paste0("abx_", abx_level)] <- stats::predict(outcome_model_1a, newdata = data_abx[,c(abx_var_name,
-                                                                                                               covariate_list,
-                                                                                                               severity_list,
-                                                                                                               pathogen_quantity_list)], type = "response")$pred
       
-      if(!att){
-        exit("Skip non-ATT version for now")
-        
-        #     # Regress yhat_level_1 on all other non-mediating variables in subset with infection = 1, call this model2
-        #     data$yhat_level_1 <- yhat_level_1
-        #     sub_inf_1 <- data[data[[infection_var_name]] == 1,]
-        #     
-        #     # covariate list for the exposed (may or may not include the pathogens)
-        #     model2 <- stats::glm(stats::as.formula(paste("yhat_level_1", "~", paste(covariate_list, collapse = "+"))),
-        #                          data = sub_inf_1,
-        #                          family = outcome_type)
-        #     
-        #     # Predict from model2 on everyone and average
-        #     data$ybar_level_1_preds <- stats::predict(model2, newdata = data, type = "response")
-        #     ybar_level_1 <- mean(data$ybar_level_1_preds, na.rm = TRUE)
-        
-      } else{
-        # ybar_level_1 <- mean(yhat_level_1[data[[infection_var_name]] == 1], na.rm = TRUE)
-      }
+      ## 2a: Predictions for infection = 1 (no 2nd stage model needed)
       
-        ## 2b: Second stage regression model for no attribution
+      outcome_vectors_1a[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
+                                                                                                                 covariate_list,
+                                                                                                                 severity_list,
+                                                                                                                 pathogen_quantity_list)], type = "response")$pred
       
-        # Estimate outcome for abx = abx_level, infection = 0
-        # data_level_0 <- data
-        # data_level_0[[infection_var_name]] <- 0
-        # data_level_1[[abx_var_name]] <- abx_level
-        # 
-        # yhat_level_0 <- stats::predict(outcome_model_1b, newdata = data_level_0, type = "response")
-        # data$yhat_level_0 <- yhat_level_0
-        
-        # QUESTION same as above, sheet says naturally so should this just be data in general? not setting abx level?
-        outcome_vectors_1b[,paste0("abx_", abx_level)] <- stats::predict(outcome_model_1b, newdata = data[,c(abx_var_name,
+      ## 2b: Predictions from 1b + Second stage regression model for no attribution
+      
+      outcome_vectors_1b[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_1b, newdata = data[, c(abx_var_name,
                                                                                                              covariate_list,
                                                                                                              severity_list,
                                                                                                              pathogen_quantity_list)], type = "response")$pred
-        
-        # Get sub_no_attr_complete with yhat_level_0 predictions using obs_id
-        data$set_abx_outcome <- stats::predict(outcome_model_1b, newdata = data_abx[,c(abx_var_name,
-                                                                                  covariate_list,
-                                                                                  severity_list,
-                                                                                  pathogen_quantity_list)], type = "response")$pred
-        
-        # Take new subset because added set_abx_outcome column
-        sub_no_attr_2b <- data[which(data[[infection_var_name]] == 0),]
-        
-        if(!is.na(no_etiology_var_name)){
-          sub_no_attr_2b <- sub_no_attr_2b[which(sub_no_attr_2b[[no_etiology_var_name]] == 1),]
-        } else {
-          # otherwise find which rows have no attr pathogens in pathogen_attributable_list
-          sub_no_attr_2b <- sub_no_attr_2b[which(rowSums(sub_no_attr_2b[,pathogen_attributable_list]) == 0),]
-        }
-        
-        outcome_model_2b <- SuperLearner::SuperLearner(Y = sub_no_attr_2b[['set_abx_outcome']],
-                                                       X = sub_no_attr_2b[,covariate_list, drop = FALSE],
-                                                       family = outcome_type,
-                                                       SL.library = sl.library.outcome,
-                                                       cvControl = list(V = v_folds))
-        if(!att){
-          exit("Skip non-ATT version for now")
-          
-          # data$ybar_level_0_preds <- stats::predict(model3, newdata = data, type = "response")
-          # ybar_level_0 <- mean(data$ybar_level_0_preds, na.rm = TRUE)
-        }else{
-          # yhat_level_0b <- stats::predict(outcome_model_2b, newdata = sub_inf_attr[,c(covariate_list)], type = "response")
-          # ybar_level_0 <- mean(yhat_level_0b, na.rm = TRUE)
-          
-          # QUESTION same as above not setting abx level?
-          outcome_vectors_2b[,paste0("abx_", abx_level)] <- stats::predict(outcome_model_2b, newdata = data[,c(covariate_list)], type = "response")$pred
-        }
-
-        # inf_abx_level <- ybar_level_1 - ybar_level_0
-        # 
-        # # Add results to dataframe
-        # results_df[i, "abx_level_inf_1"] <- ybar_level_1
-        # results_df[i, "abx_level_inf_0"] <- ybar_level_0
-        # results_df[i, "effect_inf_abx_level"] <- inf_abx_level
+      
+      # Get sub_no_attr_complete with yhat_level_0 predictions using obs_id
+      data$set_abx_outcome <- stats::predict(outcome_model_1b, newdata = data_abx[, c(abx_var_name,
+                                                                                      covariate_list,
+                                                                                      severity_list,
+                                                                                      pathogen_quantity_list)], type = "response")$pred
+      
+      # Take new subset because added set_abx_outcome column
+      sub_no_attr_2b <- data[which(data[[infection_var_name]] == 0), ]
+      
+      if (!is.na(no_etiology_var_name)) {
+        sub_no_attr_2b <- sub_no_attr_2b[which(sub_no_attr_2b[[no_etiology_var_name]] == 1), ]
+      } else {
+        # otherwise find which rows have no attr pathogens in pathogen_attributable_list
+        sub_no_attr_2b <- sub_no_attr_2b[which(rowSums(sub_no_attr_2b[, pathogen_attributable_list]) == 0), ]
+      }
+      
+      outcome_model_2b <- SuperLearner::SuperLearner(
+        Y = sub_no_attr_2b[['set_abx_outcome']],
+        X = sub_no_attr_2b[, covariate_list, drop = FALSE],
+        family = outcome_type,
+        SL.library = sl.library.outcome,
+        cvControl = list(V = v_folds)
+      )
+      
+      outcome_vectors_2b[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_2b, newdata = data[, c(covariate_list)], type = "response")$pred
       
     }
     
@@ -319,8 +263,8 @@ abx_growth_gcomp <- function(data,
           prop_vectors_1b[,paste0("abx_", abx_level)] <- tmp_pred_b
         } else{
           # Middle prediction
-          prop_vectors_1a[,paste0("abx_", abx_level)] <- tmp_pred_a * (1 - prop_vectors_1a[,ncol(prop_vectors_1a)]) # prediction * previous column 
-          prop_vectors_1b[,paste0("abx_", abx_level)] <- tmp_pred_b * (1 - prop_vectors_1a[,ncol(prop_vectors_1b)]) # prediction * previous column
+          prop_vectors_1a[,paste0("abx_", abx_level)] <- tmp_pred_a * (1 - prop_vectors_1a[,ncol(prop_vectors_1a)]) # prediction * (1 - previous column) 
+          prop_vectors_1b[,paste0("abx_", abx_level)] <- tmp_pred_b * (1 - prop_vectors_1a[,ncol(prop_vectors_1b)]) # prediction * (1 - previous column)
         }
 
       } else{
@@ -337,9 +281,9 @@ abx_growth_gcomp <- function(data,
     prop_model_2a_1 <- SuperLearner::SuperLearner(Y = data[[infection_var_name]],
                                                  X = data[, covariate_list, drop = FALSE], 
                                                  family = stats::binomial(),
-                                                 SL.library = sl.library.treatment, # QUESTION should this be different than prop model for abx?
+                                                 SL.library = sl.library.infection, 
                                                  cvControl = list(V = v_folds))
-    
+    # QUESTION not sure if this is right??
     tmp_pred_2a_1 <- prop_model_2a_1$SL.pred
     prop_vectors_2a$inf_attr <- tmp_pred_2a_1
     
@@ -355,11 +299,13 @@ abx_growth_gcomp <- function(data,
     
     prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
                                                   X = sub_no_shig[,covariate_list, drop = FALSE],
+                                                  newX = data[,covariate_list, drop = FALSE],
                                                   family = stats::binomial(),
-                                                  SL.library = sl.library.treatment,
+                                                  SL.library = sl.library.infection,
                                                   cvControl = list(V = v_folds))
     
-    tmp_pred_2a_2 <- stats::predict(prop_model_2a_2, newdata = data[,covariate_list, drop = FALSE], type = "response")$pred
+    #tmp_pred_2a_2 <- stats::predict(prop_model_2a_2, newdata = data[,covariate_list, drop = FALSE], type = "response")$pred
+    tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
     prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
     
     ## Part 3: Propensity models for missingness
@@ -416,13 +362,25 @@ abx_growth_gcomp <- function(data,
     #prop_vectors_3a (3vec)
     #prop_vectors_3b (3vec)
     
-    exit("stopped here")
+    # all vectors length nrow(data)
+    
+    stop("stopped here")
+    
+    # OLD FORMAT RESULTS
+    # (try to put in this form at end so don't have to redo printing fn again?? )
+    
+    # results_df <- data.frame(abx_levels = abx_levels,
+    #                          abx_level_inf_1 = vector("numeric", length = length(abx_levels)),
+    #                          abx_level_inf_0 = vector("numeric", length = length(abx_levels)),
+    #                          effect_inf_abx_level = vector("numeric", length = length(abx_levels)))
+    
+    
     # Return list with results dataframe (old version, effect est only)
     #return(results_df)
     
   } else {
     
-    exit("Skip for now")
+    stop("Skip for now")
     
     # ----------------------------------------
     # Traditional G-Computation 
