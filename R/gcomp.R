@@ -50,6 +50,7 @@ abx_growth_gcomp <- function(data,
                              pathogen_attributable_list = NULL,
                              outcome_type = "gaussian",
                              sl.library.outcome = NULL, 
+                             sl.library.outcome.2 = NULL, 
                              sl.library.treatment = NULL,
                              sl.library.infection = NULL,
                              sl.library.missingness = NULL,
@@ -66,7 +67,8 @@ abx_growth_gcomp <- function(data,
     ### STEP 0: Create subsets of data for model fitting
     
     ## Subset 0a: subset shigella (or other infection variable) attr cases
-    sub_inf_attr <- data[which(data[[infection_var_name]] == 1),]
+    inf_attr_idx <- which(data[[infection_var_name]] == 1)
+    sub_inf_attr <- data[inf_attr_idx,]
     
     # Full data (including missing outcome)
     I_Y_inf_attr <- ifelse(is.na(sub_inf_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
@@ -86,14 +88,15 @@ abx_growth_gcomp <- function(data,
     abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
     
     ## Subset 0b: subset to cases with no etiology
-    sub_no_attr <- data[which(data[[infection_var_name]] == 0),]
-    
-    # if data has var indicating no etiology, use that
     if(!is.na(no_etiology_var_name)){
-      sub_no_attr <- sub_no_attr[which(sub_no_attr[[no_etiology_var_name]] == 1),]
-    } else {
-      # otherwise find which rows have no attr pathogens in pathogen_attributable_list
-      sub_no_attr <- sub_no_attr[which(rowSums(sub_no_attr[,pathogen_attributable_list]) == 0),]
+      sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1),]
+    } else{
+      I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list]) == 0),
+                          1, 0)
+      data$no_etiology <- I_no_attr
+      no_etiology_var_name <- "no_etiology"
+      
+      sub_no_attr <- data[which(data$no_etiology == 1),]
     }
     
     I_Y_no_attr <- ifelse(is.na(sub_no_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
@@ -137,9 +140,13 @@ abx_growth_gcomp <- function(data,
     # For each level of abx, predict setting abx = x, infection = 1 & abx = x, infection = 0
     abx_levels <- unique(data[[abx_var_name]])[!is.na(unique(data[[abx_var_name]]))]
     
-    outcome_vectors_1a <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    outcome_vectors_1b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    outcome_vectors_2b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
+    outcome_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    outcome_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    outcome_vectors_2b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    
+    colnames(outcome_vectors_1a) <- paste0("abx_", abx_levels)
+    colnames(outcome_vectors_1b) <- paste0("abx_", abx_levels)
+    colnames(outcome_vectors_2b) <- paste0("abx_", abx_levels)
     
     # Iterate through each abx level
     for (i in 1:length(abx_levels)) {
@@ -150,23 +157,21 @@ abx_growth_gcomp <- function(data,
       
       ## 2a: Predictions for infection = 1 (no 2nd stage model needed)
       
-      outcome_vectors_1a[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
+      outcome_vectors_1a[, i] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
                                                                                                                  covariate_list,
                                                                                                                  severity_list,
                                                                                                                  pathogen_quantity_list)], type = "response")$pred
       
+      
       ## 2b: Predictions from 1b + Second stage regression model for no attribution
       
-      outcome_vectors_1b[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_1b, newdata = data[, c(abx_var_name,
+      outcome_vectors_1b[, i] <- stats::predict(outcome_model_1b, newdata = data_abx[, c(abx_var_name,
                                                                                                              covariate_list,
                                                                                                              severity_list,
                                                                                                              pathogen_quantity_list)], type = "response")$pred
       
       # Get sub_no_attr_complete with yhat_level_0 predictions using obs_id
-      data$set_abx_outcome <- stats::predict(outcome_model_1b, newdata = data_abx[, c(abx_var_name,
-                                                                                      covariate_list,
-                                                                                      severity_list,
-                                                                                      pathogen_quantity_list)], type = "response")$pred
+      data$set_abx_outcome <-  outcome_vectors_1b[, i]
       
       # Take new subset because added set_abx_outcome column
       sub_no_attr_2b <- data[which(data[[infection_var_name]] == 0), ]
@@ -178,26 +183,36 @@ abx_growth_gcomp <- function(data,
         sub_no_attr_2b <- sub_no_attr_2b[which(rowSums(sub_no_attr_2b[, pathogen_attributable_list]) == 0), ]
       }
       
+      if(is.null(sl.library.outcome.2)){
+        sl.library.outcome.2 <- sl.library.outcome
+      }
+      
       outcome_model_2b <- SuperLearner::SuperLearner(
         Y = sub_no_attr_2b[['set_abx_outcome']],
         X = sub_no_attr_2b[, covariate_list, drop = FALSE],
         family = outcome_type,
-        SL.library = sl.library.outcome,
+        SL.library = sl.library.outcome.2, 
         cvControl = list(V = v_folds)
       )
       
-      outcome_vectors_2b[, paste0("abx_", abx_level)] <- stats::predict(outcome_model_2b, newdata = data[, c(covariate_list)], type = "response")$pred
+      outcome_vectors_2b[, i] <- stats::predict(outcome_model_2b, newdata = data[, c(covariate_list)], type = "response")$pred
       
     }
     
     
     ### STEP 3: Propensity models
     
-    prop_vectors_1a <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    prop_vectors_1b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    prop_vectors_2a <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    prop_vectors_3a <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
-    prop_vectors_3b <- data.frame(matrix(ncol = 0, nrow = nrow(data)))
+    prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    prop_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    prop_vectors_2a <- data.frame(matrix(ncol = 2, nrow = nrow(data)))
+    prop_vectors_3a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    prop_vectors_3b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    
+    colnames(prop_vectors_1a) <- paste0("abx_", abx_levels)
+    colnames(prop_vectors_1b) <- paste0("abx_", abx_levels)
+    colnames(prop_vectors_2a) <- c("inf_attr", "no_attr")
+    colnames(prop_vectors_3a) <- paste0("abx_", abx_levels)
+    colnames(prop_vectors_3b) <- paste0("abx_", abx_levels)
     
     ## Part 1: Propensity models for antibiotics
     for(i in 1:length(abx_levels)){
@@ -259,18 +274,23 @@ abx_growth_gcomp <- function(data,
         
         if(i == 1){
           # First prediction
-          prop_vectors_1a[,paste0("abx_", abx_level)] <- tmp_pred_a
-          prop_vectors_1b[,paste0("abx_", abx_level)] <- tmp_pred_b
+          prop_vectors_1a[,i] <- tmp_pred_a
+          prop_vectors_1b[,i] <- tmp_pred_b
         } else{
           # Middle prediction
-          prop_vectors_1a[,paste0("abx_", abx_level)] <- tmp_pred_a * (1 - prop_vectors_1a[,ncol(prop_vectors_1a)]) # prediction * (1 - previous column) 
-          prop_vectors_1b[,paste0("abx_", abx_level)] <- tmp_pred_b * (1 - prop_vectors_1a[,ncol(prop_vectors_1b)]) # prediction * (1 - previous column)
+          # tmp_pred_a * for j in 1:(i-1) (1 - tmp_pred_aj) * TODO
+          for(j in 1:(i-1)){
+            tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[,j])
+            tmp_pred_b <- tmp_pred_b * (1 - prop_vectors_1b[,j])
+          }
+          prop_vectors_1a[,i] <- tmp_pred_a 
+          prop_vectors_1b[,i] <- tmp_pred_b 
         }
 
       } else{
         # Last prediction
-        prop_vectors_1a[,paste0("abx_", abx_level)] <- 1 - rowSums(prop_vectors_1a)
-        prop_vectors_1b[,paste0("abx_", abx_level)] <- 1 - rowSums(prop_vectors_1b)
+        prop_vectors_1a[,i] <- 1 - rowSums(prop_vectors_1a[,1:(ncol(prop_vectors_1a)-1)])
+        prop_vectors_1b[,i] <- 1 - rowSums(prop_vectors_1b[,1:(ncol(prop_vectors_1b)-1)])
       }
       
     }
@@ -283,7 +303,6 @@ abx_growth_gcomp <- function(data,
                                                  family = stats::binomial(),
                                                  SL.library = sl.library.infection, 
                                                  cvControl = list(V = v_folds))
-    # QUESTION not sure if this is right??
     tmp_pred_2a_1 <- prop_model_2a_1$SL.pred
     prop_vectors_2a$inf_attr <- tmp_pred_2a_1
     
@@ -304,7 +323,6 @@ abx_growth_gcomp <- function(data,
                                                   SL.library = sl.library.infection,
                                                   cvControl = list(V = v_folds))
     
-    #tmp_pred_2a_2 <- stats::predict(prop_model_2a_2, newdata = data[,covariate_list, drop = FALSE], type = "response")$pred
     tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
     prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
     
@@ -337,34 +355,137 @@ abx_growth_gcomp <- function(data,
       pred_data <- data
       pred_data[[abx_var_name]] <- abx_level
       
-      prop_vectors_3a[,paste0("abx_", abx_level)] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                                          covariate_list,
-                                                                                                          severity_list,
-                                                                                                          pathogen_quantity_list)], type = "response")$pred
-      prop_vectors_3b[,paste0("abx_", abx_level)] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
-                                                                                                          covariate_list,
-                                                                                                          severity_list,
-                                                                                                          pathogen_quantity_list)], type = "response")$pred
+      prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
+                                                                                  covariate_list,
+                                                                                  severity_list,
+                                                                                  pathogen_quantity_list)], type = "response")$pred
+      prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
+                                                                                  covariate_list,
+                                                                                  severity_list,
+                                                                                  pathogen_quantity_list)], type = "response")$pred
     }
    
+    ## Plug-in estimates
     
-    # PUT IT ALL TOGETHER FOR AIPW???
-    # Stopped here
+    plug_ins_inf <- colMeans(outcome_vectors_1a[inf_attr_idx, , drop = FALSE])
+    plug_ins_no_attr <- colMeans(outcome_vectors_2b[inf_attr_idx, , drop = FALSE])
     
-    # We have dataframes with:
-    #outcome_vectors_1a (3vec)
-    #outcome_vectors_1b (3vec)
-    #outcome_vectors_2b (3vec)
+    ## Bias corrections
+    inf_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    no_attr_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
     
-    #prop_vectors_1a (3vec)
-    #prop_vectors_1b (3vec)
-    #prop_vectors_2a (2vec)
-    #prop_vectors_3a (3vec)
-    #prop_vectors_3b (3vec)
+    colnames(inf_eifs) <- paste0("inf_eif_", abx_levels)
+    colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
     
-    # all vectors length nrow(data)
+    for(i in 1:length(abx_levels)){
+      abx_level <- abx_levels[i]
+      
+      # 1 - Bias correction for shigella (or other infection) attributable, abx level = a
+      I_Inf_1 <- data[[infection_var_name]]
+      P_Inf_1 <- mean(prop_vectors_2a[,1])
+      
+      I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
+      P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[,i]
+      
+      I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+      P_Delta_0__Inf_all <- 1 - prop_vectors_3a[,i]
     
-    stop("stopped here")
+      obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
+      Qbar_Inf_1_Abx_a_Covariates <- outcome_vectors_1a[,i]
+      
+      bias_correct_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+        (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
+      
+      # 2 - Bias correction for no etiology (some repeats from above for clarity while writing)
+      if(is.na(no_etiology_var_name)){
+        I_No_attr_1 <- data$no_etiology
+      } else{
+        I_No_attr_1 <- data[[no_etiology_var_name]]
+      }
+      
+      P_No_attr__Covaritates <- prop_vectors_2a[,2]
+      
+      P_Inf_1__Covariates <- prop_vectors_2a[,1]
+      P_Inf_1 <- mean(prop_vectors_2a[,1])
+      
+      I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
+      P_Abx_a__Covariates <- prop_vectors_1b[,i]
+      
+      I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+      P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[,i]
+      
+      obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
+      Qbar_No_attr_Abx_a_Covariates <- outcome_vectors_1b[,i]
+      
+      Qbar_No_attr_Covariates <- outcome_vectors_2b[,i]
+      
+      I_Inf_1 <- data[[infection_var_name]]
+      P_Inf_1 <- mean(prop_vectors_2a[,1])
+      
+      bias_correction_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+        (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - Qbar_No_attr_Covariates) +
+        (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Covariates - plug_ins_no_attr[i])
+    
+      inf_eifs[,i] <- bias_correct_inf
+      no_attr_eifs[,i] <- bias_correction_no_attr
+      
+    }
+    
+    aipw_inf <- plug_ins_inf + colMeans(inf_eifs)
+    aipw_no_attr <- plug_ins_no_attr + colMeans(no_attr_eifs)
+    
+    eif_matrix <- cbind(inf_eifs, no_attr_eifs)
+    cov_matrix <- stats::cov(eif_matrix)
+    
+    # Compute effects for all levels of abx
+    
+    aipws_effect <- vector("numeric", length = length(abx_levels))
+    vars_effect <- vector("numeric", length = length(abx_levels))
+    eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    
+    names(aipws_effect) <- paste0("effect_", abx_levels)
+    names(vars_effect) <- paste0("effect_", abx_levels)
+    colnames(eifs_effect) <- paste0("effect_", abx_levels)
+    
+    for(i in 1:length(abx_levels)){
+      
+      # Get AIPW for Effect
+      aipw_effect <- aipw_inf[i] - aipw_no_attr[i]
+      aipws_effect[i] <- aipw_effect
+      
+      # Use EIFs to get variance for effect
+      idx_1 <- i
+      idx_2 <- length(abx_levels) + i
+      
+      gradient <- rep(0, length(abx_levels)*2)
+      gradient[idx_1] <- 1
+      gradient[idx_2] <- -1
+      
+      gradient <- matrix(gradient, ncol = 1)
+      
+      # QUESTION i don't think we need variance if using EIF at end?? 
+      # was just trying to copy from my thesis
+      var_effect <- t(gradient) %*% cov_matrix %*% gradient
+      eif_effect <- as.numeric(as.matrix(eif_matrix) %*% gradient)
+      eifs_effect[,i] <- eif_effect
+      vars_effect[i] <- var_effect
+      
+    }
+    
+    # Put all pt ests into dataframe same format as original gcomp analysis
+    results_df <- data.frame(abx_levels = abx_levels,
+                             abx_level_inf_1 = aipw_inf,
+                             abx_level_inf_0 = aipw_no_attr,
+                             effect_inf_abx_level = aipws_effect)
+    
+    # Add EIFs for effects to EIF matrix
+    eif_matrix <- cbind(eif_matrix, eifs_effect)
+    cov_matrix <- stats::cov(eif_matrix)
+    eif_hat <- sqrt( diag(cov_matrix) / nrow(data) )
+    
+    return(list(results_df = results_df,
+                eif_matrix = eif_matrix,
+                se = eif_hat))
     
     # OLD FORMAT RESULTS
     # (try to put in this form at end so don't have to redo printing fn again?? )
