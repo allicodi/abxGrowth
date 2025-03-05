@@ -44,7 +44,8 @@ aggcomp <- function(data,
                     outcome_type = "gaussian",
                     att = TRUE,
                     v_folds = 10,
-                    return_models = FALSE){
+                    return_models = FALSE,
+                    child_id_var_name = NULL){
   
   # set seed
   set.seed(seed)
@@ -68,7 +69,8 @@ aggcomp <- function(data,
                                sl.library.missingness = sl.library.missingness,
                                v_folds = v_folds,
                                att = att,
-                               return_models = return_models)
+                               return_models = return_models,
+                               child_id_var_name = child_id_var_name)
     
     # Get standard error and confidence intervals for those point estimates
     bootstrap_results <- bootstrap_estimates(data = data, 
@@ -115,7 +117,8 @@ aggcomp <- function(data,
                                             sl.library.infection = sl.library.infection,
                                             sl.library.missingness = sl.library.missingness,
                                             v_folds = v_folds,
-                                            att = att)
+                                            att = att,
+                                            child_id_var_name = child_id_var_name)
     
     bootstrap_results <- bootstrap_estimates(data, 
                                              laz_var_name = laz_var_name,

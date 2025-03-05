@@ -56,7 +56,8 @@ abx_growth_gcomp <- function(data,
                              sl.library.missingness = NULL,
                              v_folds = 5,
                              att = TRUE,
-                             return_models = FALSE){
+                             return_models = FALSE,
+                             child_id_var_name = NULL){
   
   if(!is.null(severity_list)){
     
@@ -437,14 +438,24 @@ abx_growth_gcomp <- function(data,
     eif_matrix <- cbind(inf_eifs, no_attr_eifs)
     cov_matrix <- stats::cov(eif_matrix)
     
-    # Compute effects for all levels of abx
+    # Get id for each participant and recreate EIFs based on this if present
+    if(!is.null(child_id_var_name)){
+      child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
+      child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
+      
+      scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+    } else{
+      scaled_matrix <- eif_matrix
+    }
     
     aipws_effect <- vector("numeric", length = length(abx_levels))
-    eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
     
     names(aipws_effect) <- paste0("effect_", abx_levels)
     colnames(eifs_effect) <- paste0("effect_", abx_levels)
     
+    # Compute effects for all levels of abx
+
     for(i in 1:length(abx_levels)){
       
       # Get AIPW for Effect
@@ -461,7 +472,7 @@ abx_growth_gcomp <- function(data,
       
       gradient <- matrix(gradient, ncol = 1)
       
-      eif_effect <- as.numeric(as.matrix(eif_matrix) %*% gradient)
+      eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
       eifs_effect[,i] <- eif_effect
       
     }
@@ -473,12 +484,12 @@ abx_growth_gcomp <- function(data,
                              effect_inf_abx_level = aipws_effect)
     
     # Add EIFs for effects to EIF matrix
-    eif_matrix <- cbind(eif_matrix, eifs_effect)
-    cov_matrix <- stats::cov(eif_matrix)
-    eif_hat <- sqrt( diag(cov_matrix) / nrow(data) )
+    eif_matrix_scaled <- cbind(scaled_matrix, eifs_effect)
+    cov_matrix <- stats::cov(eif_matrix_scaled)
+    eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
     
     return(list(results_df = results_df,
-                eif_matrix = eif_matrix,
+                eif_matrix = eif_matrix_scaled,
                 se = eif_hat))
     
   } else {
@@ -804,8 +815,18 @@ abx_growth_gcomp <- function(data,
     
     # Compute effects for all levels of abx
     
+    # Get id for each participant and recreate EIFs based on this if present
+    if(!is.null(child_id_var_name)){
+      child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
+      child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
+      
+      scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+    }else{
+      scaled_matrix <- eif_matrix
+    }
+    
     aipws_effect <- vector("numeric", length = length(abx_levels))
-    eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
     
     names(aipws_effect) <- paste0("effect_", abx_levels)
     colnames(eifs_effect) <- paste0("effect_", abx_levels)
@@ -826,7 +847,7 @@ abx_growth_gcomp <- function(data,
       
       gradient <- matrix(gradient, ncol = 1)
       
-      eif_effect <- as.numeric(as.matrix(eif_matrix) %*% gradient)
+      eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
       eifs_effect[,i] <- eif_effect
       
     }
@@ -838,12 +859,12 @@ abx_growth_gcomp <- function(data,
                              effect_inf_abx_level = aipws_effect)
     
     # Add EIFs for effects to EIF matrix
-    eif_matrix <- cbind(eif_matrix, eifs_effect)
-    cov_matrix <- stats::cov(eif_matrix)
-    eif_hat <- sqrt( diag(cov_matrix) / nrow(data) )
+    eif_matrix_scaled <- cbind(scaled_matrix, eifs_effect)
+    cov_matrix <- stats::cov(eif_matrix_scaled)
+    eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
     
     return(list(results_df = results_df,
-                eif_matrix = eif_matrix,
+                eif_matrix = eif_matrix_scaled,
                 se = eif_hat))
   }
 
@@ -907,7 +928,8 @@ abx_growth_gcomp_case_control <- function(data,
                              sl.library.missingness = NULL,
                              v_folds = 5,
                              att = TRUE,
-                             return_models = FALSE){
+                             return_models = FALSE,
+                             child_id_var_name = NULL){
   
   # Estimands of interest: (!ATT)
   # E[Growth(Shigella diar = 1, Antibiotics = a) - Growth(Shigella diar = 0) | control ] = 
@@ -1163,9 +1185,7 @@ abx_growth_gcomp_case_control <- function(data,
   # I(control) / P(control | stuff) * I(not missing) / P(not missing | control, stuff) * P(shigg atr | stuff) / P(shigg atr) * (outcome - prediction from outcome model) +
   #   I(shig attr) / P(shigg atr) * (prediction from outcome model - plug-in)
   
-  
   I_control <- ifelse(data[[case_var_name]] == 1, 0, 1)
-  # QUESTION P(control | stuff) = 1 - P(case | stuff)??
   P_control__Covariates <- 1 - prop_vectors_2a[,1]
   
   I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
@@ -1191,8 +1211,17 @@ abx_growth_gcomp_case_control <- function(data,
   
   # Compute effects for all levels of abx
   
+  # Get id for each participant and recreate EIFs based on this if present
+  if(!is.null(child_id_var_name)){
+    child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
+    child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
+    scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+  }else{
+    scaled_matrix <- eif_matrix
+  }
+  
   aipws_effect <- vector("numeric", length = length(abx_levels))
-  eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+  eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   
   names(aipws_effect) <- paste0("effect_", abx_levels)
   colnames(eifs_effect) <- paste0("effect_", abx_levels)
@@ -1210,106 +1239,23 @@ abx_growth_gcomp_case_control <- function(data,
     gradient[idx_2] <- -1
     
     gradient <- matrix(gradient, ncol = 1)
-    eif_effect <- as.numeric(as.matrix(eif_matrix) %*% gradient)
+    eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
     eifs_effect[,i] <- eif_effect
     
   }
-  
-  # results_df <- data.frame(abx_levels = abx_levels,
-  #                          abx_level_case = vector("numeric", length = length(abx_levels)),
-  #                          abx_level_control = vector("numeric", length = length(abx_levels)),
-  #                          effect_inf_abx_level = vector("numeric", length = length(abx_levels)))
   
   results_df <- data.frame(abx_levels = abx_levels,
                            abx_level_case = aipw_case,
                            abx_level_control = rep(aipw_control, length(abx_levels)),
                            effect_inf_abx_level = aipws_effect)
   
-  eif_matrix <- cbind(eif_matrix, eifs_effect)
-  cov_matrix <- stats::cov(eif_matrix)
-  eif_hat <- sqrt( diag(cov_matrix) / nrow(data) )
+  eif_matrix_scaled <- cbind(scaled_matrix, eifs_effect)
+  cov_matrix <- stats::cov(eif_matrix_scaled)
+  eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
   
   return(list(results_df = results_df,
-              eif_matrix = eif_matrix,
+              eif_matrix = eif_matrix_scaled,
               se = eif_hat))
-
-  # 
-  # return(list(results_df = results_df,
-  #             eif_matrix = eif_matrix,
-  #             se = eif_hat))
-  
-  
-  
-  
-  # --------- old
-  
-  
-  # abx_levels <- unique(case_data[[abx_var_name]])
-  # 
-  # results_df <- data.frame(abx_levels = abx_levels,
-  #                          abx_level_case = vector("numeric", length = length(abx_levels)),
-  #                          abx_level_control = vector("numeric", length = length(abx_levels)),
-  #                          effect_inf_abx_level = vector("numeric", length = length(abx_levels)))
-  # 
-  # for(i in 1:length(abx_levels)){
-  #   
-  #   abx_level <- abx_levels[i]
-  #   
-  #   data_abx_level <- case_data
-  #   data_abx_level[[abx_var_name]] <- abx_level
-  #   yhat_abx_level <- stats::predict(model1_case, newdata = data_abx_level, type = "response")
-  #   
-  #   if(!att){
-  #     # Regress yhat_01 on all other non-mediating variables 
-  #     case_data$yhat_abx_level <- yhat_abx_level
-  #     
-  #     model2 <- stats::glm(stats::as.formula(paste("yhat_abx_level", "~", paste(covariate_list, collapse = "+"))),
-  #                          data = case_data,
-  #                          family = outcome_type)
-  #     
-  #     # Predict from model2 on controls
-  #     ybar_abx_level <- mean(stats::predict(model2, newdata = control_data, type = "response"), na.rm = TRUE)
-  #   } else {
-  #     ybar_abx_level <- mean(yhat_abx_level, na.rm = TRUE)
-  #   }
-  #   
-  #   results_df[i,"abx_level_case"] <- ybar_abx_level
-  #   
-  # }
-  # 
-  # # ------------------------------------------------------------
-  # # Part 2: E[Growth | Control] 
-  # # ------------------------------------------------------------
-  # if(!att){
-  #   ybar_control <- mean(control_data[[laz_var_name]], na.rm = TRUE)
-  # }else{
-  #   # fit model of laz_var_name ~ covariate_list in the controls
-  #   # predict from model in cases, avg predictions
-  #   
-  #   # NOTE in this case covariate lists should be the same but leave as option
-  #   model_1_formula_control <- stats::as.formula(
-  #     paste(laz_var_name, "~",
-  #           paste(covariate_list_control, collapse = "+"))
-  #   )
-  #   
-  #   # Regress LAZ on covariates
-  #   model_1_control <- stats::glm(model_1_formula_control,
-  #                                 data = control_data,
-  #                                 family = outcome_type)
-  #   
-  #   yhat_control <- stats::predict(model_1_control,
-  #                             newdata = case_data,
-  #                             type = "response")
-  #   
-  #   ybar_control <- mean(yhat_control, na.rm = TRUE)
-  # }
-  # 
-  # results_df$abx_level_control <- rep(ybar_control, nrow(results_df))
-  # 
-  # # Get effect estimates
-  # results_df$effect_inf_abx_level <- results_df$abx_level_case - results_df$abx_level_control
-  # 
-  # return(results_df)
   
 }
 
