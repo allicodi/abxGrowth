@@ -394,7 +394,7 @@ abx_growth_gcomp <- function(data,
       obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
       Qbar_Inf_1_Abx_a_Covariates <- outcome_vectors_1a[,i]
       
-      bias_correct_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+      eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
         (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
       
       # 2 - Bias correction for no etiology (some repeats from above for clarity while writing)
@@ -423,15 +423,16 @@ abx_growth_gcomp <- function(data,
       I_Inf_1 <- data[[infection_var_name]]
       P_Inf_1 <- mean(prop_vectors_2a[,1])
       
-      bias_correction_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+      eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
         (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - Qbar_No_attr_Covariates) + 
         (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Covariates - plug_ins_no_attr[i]) 
     
-      inf_eifs[,i] <- bias_correct_inf
-      no_attr_eifs[,i] <- bias_correction_no_attr
+      inf_eifs[,i] <- eif_vec_inf
+      no_attr_eifs[,i] <- eif_vec_no_attr
       
     }
     
+    # Add bias correction
     aipw_inf <- plug_ins_inf + colMeans(inf_eifs)
     aipw_no_attr <- plug_ins_no_attr + colMeans(no_attr_eifs)
     
@@ -770,7 +771,7 @@ abx_growth_gcomp <- function(data,
       obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
       Qbar_Inf_1_Abx_a_Covariates <- outcome_vectors_1a[,i]
       
-      bias_correct_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+      eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
         (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
       
       # 2 - Bias correction for no etiology (some repeats from above for clarity while writing)
@@ -799,11 +800,11 @@ abx_growth_gcomp <- function(data,
       I_Inf_1 <- data[[infection_var_name]]
       P_Inf_1 <- mean(prop_vectors_2a[,1])
       
-      bias_correction_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+      eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
         (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i]) 
       
-      inf_eifs[,i] <- bias_correct_inf
-      no_attr_eifs[,i] <- bias_correction_no_attr
+      inf_eifs[,i] <- eif_vec_inf
+      no_attr_eifs[,i] <- eif_vec_no_attr
       
     }
     
@@ -925,26 +926,21 @@ abx_growth_gcomp_case_control <- function(data,
                              sl.library.outcome.control = NULL,
                              sl.library.treatment = NULL,
                              sl.library.infection = NULL,
-                             sl.library.missingness = NULL,
+                             sl.library.missingness.case = NULL,
+                             sl.library.missingness.control = NULL,
                              v_folds = 5,
                              att = TRUE,
                              return_models = FALSE,
                              child_id_var_name = NULL){
   
-  # Estimands of interest: (!ATT)
-  # E[Growth(Shigella diar = 1, Antibiotics = a) - Growth(Shigella diar = 0) | control ] = 
-  #    E[ E [ Growth | Shigella diar = 1, Antibiotics = a, severity, baseline] | Shigella diar = 1, baseline ] | control ] -
-  #    E[ Growth | control ]
-  
-  # ---------------------------------------------------------------------------------------------------------------------------
-  # Part 1: E[ E [ Growth | Shigella diar = 1, Antibiotics = a, severity, baseline] | Shigella diar = 1, baseline ] | control ]
-  # ---------------------------------------------------------------------------------------------------------------------------
+  ### STEP 0. Prep data subsets
   
   # get case vs control data
   case_data <- data[data[[case_var_name]] == 1,]
   control_data <- data[data[[case_var_name]] == 0,]
   
   case_data_idx <- which(data[[case_var_name]] == 1)
+  control_data_idx <- which(data[[case_var_name]] == 0)
   
   # Case data prep
   I_Y_case <- ifelse(is.na(case_data[[laz_var_name]]), 1, 0)
@@ -999,7 +995,6 @@ abx_growth_gcomp_case_control <- function(data,
   ### STEP 2: Predict outcomes
   
   # For each level of abx, predict setting abx = x, infection = 1 & abx = x, infection = 0
-  # QUESTION does it matter if these are in different order? like who abx, ineff, maybe eff 
   abx_levels <- unique(case_data[[abx_var_name]])[!is.na(unique(case_data[[abx_var_name]]))]
   
   outcome_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
@@ -1012,11 +1007,10 @@ abx_growth_gcomp_case_control <- function(data,
   for (i in 1:length(abx_levels)) {
     abx_level <- abx_levels[i]
     
-    # QUESTION this has to be case data because we don't have severity vars in the controls but don't we want vectors for everyone?
-    data_abx <- data
+    data_abx <- case_data
     data_abx[[abx_var_name]] <- abx_level
     
-    outcome_vectors_1a[, i] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
+    outcome_vectors_1a[case_data_idx, i] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
                                                                                        covariate_list,
                                                                                        severity_list,
                                                                                        pathogen_quantity_list)], type = "response")$pred
@@ -1070,39 +1064,38 @@ abx_growth_gcomp_case_control <- function(data,
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
                                                   cvControl = list(V = v_folds))
-      
-      # Predictions from full data
-      tmp_pred_a <- stats::predict(prop_model_1a, newdata = data[,c(covariate_list,
+
+      tmp_pred_a <- stats::predict(prop_model_1a, newdata = case_data[,c(covariate_list,
                                                                     severity_list,
                                                                     pathogen_quantity_list)], type = "response")$pred
       
       if(i == 1){
         # First prediction
-        prop_vectors_1a[,i] <- tmp_pred_a
+        prop_vectors_1a[case_data_idx,i] <- tmp_pred_a
       } else{
         # Middle prediction
         # tmp_pred_a * for j in 1:(i-1) (1 - tmp_pred_aj) 
         for(j in 1:(i-1)){
-          tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[,j])
+          tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[case_data_idx,j])
         }
-        prop_vectors_1a[,i] <- tmp_pred_a 
+        prop_vectors_1a[case_data_idx,i] <- tmp_pred_a 
       }
       
     } else{
       # Last prediction
-      prop_vectors_1a[,i] <- 1 - rowSums(prop_vectors_1a[,1:(ncol(prop_vectors_1a)-1)])
+      prop_vectors_1a[case_data_idx,i] <- 1 - rowSums(prop_vectors_1a[case_data_idx,1:(ncol(prop_vectors_1a)-1)])
     }
     
   }
   
-  ## Part 2: Propensity models for shigella (or other infection) attribution
+  # Fill in controls with 0
+  prop_vectors_1a[is.na(prop_vectors_1a)] <- 0
   
-  # STOPPED DEBUGGING HERE
+  ## Part 2: Propensity models for shigella (or other infection) attribution
   
   # 2a_1 = Shigella Attributable ~ BL Cov
   prop_model_2a <- SuperLearner::SuperLearner(Y = data[[case_var_name]],
                                               X = data[, covariate_list, drop = FALSE],
-                                              newX = data[, covariate_list, drop = FALSE],
                                               family = stats::binomial(),
                                               SL.library = sl.library.infection, 
                                               cvControl = list(V = v_folds))
@@ -1114,40 +1107,45 @@ abx_growth_gcomp_case_control <- function(data,
   ## Missingness model in cases
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_case,
                                               X = data.frame(abx_case,
-                                                             covariates_case),
+                                                             covariates_case,
+                                                             severity_case,
+                                                             pathogen_q_case),
                                               family = stats::binomial(),
-                                              SL.library = sl.library.missingness,
+                                              SL.library = sl.library.missingness.case,
                                               cvControl = list(V = v_folds))
   
   ## Missingness model in controls
   prop_model_3b <- SuperLearner::SuperLearner(Y = I_Y_control,
                                               X = data.frame(covariates_control),
                                               family = stats::binomial(),
-                                              SL.library = sl.library.missingness,
+                                              SL.library = sl.library.missingness.control,
                                               cvControl = list(V = v_folds))
   
   # Predict setting each abx level
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]
     
-    pred_data <- data
+    pred_data <- case_data
     pred_data[[abx_var_name]] <- abx_level
     
-    prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list)], type = "response")$pred
+    prop_vectors_3a[case_data_idx,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
+                                                                                covariate_list,
+                                                                                pathogen_quantity_list,
+                                                                                severity_list)], type = "response")$pred
   }
   
-  prop_vectors_3b[,1] <- stats::predict(prop_model_3b, newdata = data[,c(covariate_list_control)], type = "response")$pred
+  # Fill in NAs with 0
+  prop_vectors_3a[is.na(prop_vectors_3a)] <- 0
   
-  # ---------
+  prop_vectors_3b[control_data_idx,1] <- prop_model_3b$SL.pred
+  prop_vectors_3b[is.na(prop_vectors_3b)] <- 0
+
   
   ## Plug-in estimates
-  
-  # QUESTION this is all cases so no idx to take?? but what happened to marginalizing over healthy controls
   plug_ins_case <- colMeans(outcome_vectors_1a[case_data_idx,])
   plug_ins_control <- colMeans(outcome_vectors_1b[case_data_idx,])
   
-  ## Bias corrections
+  ## EIF for bias corrections
   case_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   control_eifs <- data.frame(matrix(ncol = 1, nrow = nrow(data)))
   
@@ -1158,6 +1156,7 @@ abx_growth_gcomp_case_control <- function(data,
     abx_level <- abx_levels[i]
     
     # 1 - Bias correction for case, abx level = a
+    
     I_Case <- data[[case_var_name]]
     P_Case <- mean(prop_vectors_2a[,1])
     
@@ -1173,17 +1172,17 @@ abx_growth_gcomp_case_control <- function(data,
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
     Qbar_Case_Abx_a_Covariates <- outcome_vectors_1a[,i]
     
-    bias_correct_case <- (I_Case / P_Case) * (I_Abx_a / P_Abx_a__Case_Covariates) * (I_Delta_0 / P_Delta_0__Case_all) * (obs_outcome - Qbar_Case_Abx_a_Covariates) +
+    eif_case_vec <- (I_Case / P_Case) * (I_Abx_a / P_Abx_a__Case_Covariates) * (I_Delta_0 / P_Delta_0__Case_all) * (obs_outcome - Qbar_Case_Abx_a_Covariates) +
       (I_Case / P_Case) * (Qbar_Case_Abx_a_Covariates - plug_ins_case[i])
     
-    case_eifs[,i] <- bias_correct_case
+    # correct for / 0 with P_Abx_a__Case_Covariates, should be 0'd out
+    eif_case_vec <- ifelse(is.nan(eif_case_vec), 0, eif_case_vec)
+    
+    case_eifs[,i] <- eif_case_vec
     
   }
     
   # 2 - Bias correction for control
-  
-  # I(control) / P(control | stuff) * I(not missing) / P(not missing | control, stuff) * P(shigg atr | stuff) / P(shigg atr) * (outcome - prediction from outcome model) +
-  #   I(shig attr) / P(shigg atr) * (prediction from outcome model - plug-in)
   
   I_control <- ifelse(data[[case_var_name]] == 1, 0, 1)
   P_control__Covariates <- 1 - prop_vectors_2a[,1]
@@ -1195,19 +1194,16 @@ abx_growth_gcomp_case_control <- function(data,
   
   Qbar_Control_Covariates <- outcome_vectors_1b[,1]
   
-  bias_correct_control <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates) +
+  eif_control_vec <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates) +
     (I_Case / P_Case) * (Qbar_Control_Covariates - plug_ins_control)
   
-  control_eif <- bias_correct_control
+  control_eif <- eif_control_vec
   
   # Get AIPWs
-  
-  # QUESTION colMeans at certain idxs??
   aipw_case <- plug_ins_case + colMeans(case_eifs)
   aipw_control <- plug_ins_control + colMeans(control_eif)  
     
   eif_matrix <- cbind(case_eifs, control_eif)
-  cov_matrix <- stats::cov(eif_matrix)
   
   # Compute effects for all levels of abx
   
