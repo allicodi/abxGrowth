@@ -31,7 +31,7 @@
 #' @export
 #' 
 #' @returns List of class `ag_aipw_res` containing objects for AIPW result, AIPW models.
-ag_aipw <- function(data,
+agaipw <- function(data,
                     laz_var_name,
                     abx_var_name,
                     infection_var_name = NA,
@@ -51,7 +51,7 @@ ag_aipw <- function(data,
                     sl.library.missingness = c("SL.glm"),
                     sl.library.missingness.case = c("SL.glm"),
                     sl.library.missingness.control = c("SL.glm"),
-                    case_control = FALSE
+                    case_control = FALSE,
                     seed = 12345,
                     v_folds = 5,
                     return_models = FALSE,

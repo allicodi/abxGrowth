@@ -1,4 +1,3 @@
-
 #' Function for AIPW estimates of effect of infection on growth- single outcome regression
 #' 
 #' @param data dataframe containing dataset used for gcomp
@@ -60,7 +59,7 @@ aipw_other_diarrhea <- function(data,
   abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
   
   ## Subset 0b: subset to cases with no etiology
-  if(!is.na(no_etiology_var_name)){
+  if(!is.null(no_etiology_var_name)){
     sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1),]
   } else{
     I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list]) == 0),
@@ -175,20 +174,16 @@ aipw_other_diarrhea <- function(data,
       }
       
       prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list, drop = FALSE]
-      prop_severity_inf_attr <- prop_sub_inf_attr[, severity_list, drop = FALSE]
       prop_pathogen_inf_attr <- prop_sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
       
       prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list, drop = FALSE]
-      prop_severity_no_attr <- prop_sub_no_attr[, severity_list, drop = FALSE]
       prop_pathogen_no_attr <- prop_sub_no_attr[, pathogen_quantity_list, drop = FALSE]
       
       ## 1a. Propensity model for abx shigella attributable
       prop_model_1a <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
                                                   X = data.frame(prop_covariates_inf_attr,
-                                                                 prop_severity_inf_attr,
                                                                  prop_pathogen_inf_attr),
                                                   newX = data[,c(covariate_list,
-                                                                 severity_list,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -200,10 +195,8 @@ aipw_other_diarrhea <- function(data,
       ## 1b. Propensity model for abx no attribution
       prop_model_1b <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_no_attr[[abx_var_name]] == abx_level),
                                                   X = data.frame(prop_covariates_no_attr,
-                                                                 prop_severity_no_attr,
                                                                  prop_pathogen_no_attr),
                                                   newX = data[,c(covariate_list,
-                                                                 severity_list,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -487,9 +480,9 @@ aipw_other_diarrhea_2 <- function(data,
                                   infection_var_name,
                                   covariate_list,
                                   severity_list,
-                                  pathogen_quantity_list = NULL,
-                                  pathogen_attributable_list = NULL,
-                                  no_etiology_var_name = NULL,
+                                  pathogen_quantity_list = NA,
+                                  pathogen_attributable_list = NA,
+                                  no_etiology_var_name = NA,
                                   outcome_type = "gaussian",
                                   sl.library.outcome = c("SL.glm"),
                                   sl.library.outcome.2 = c("SL.glm"),
@@ -526,7 +519,7 @@ aipw_other_diarrhea_2 <- function(data,
   abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
   
   ## Subset 0b: subset to cases with no etiology
-  if(!is.na(no_etiology_var_name)){
+  if(!is.null(no_etiology_var_name)){
     sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1),]
   } else{
     I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list]) == 0),

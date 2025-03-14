@@ -3,6 +3,7 @@
 S3method(print,aggcomp_res)
 export(abx_growth_gcomp)
 export(abx_growth_gcomp_case_control)
+export(agaipw)
 export(aggcomp)
 export(impute_covariates)
 import(dplyr)
