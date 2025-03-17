@@ -962,6 +962,9 @@ plot_cis_subplots <- function(results,
   
   plot_data <- do.call(rbind, plot_data)
   
+  # Make sure subgroup is treated as factor
+  plot_data$subgroup <- factor(plot_data$subgroup)
+  
   # Get xaxis scaling 
   global_x_min <- min(plot_data$lower_ci)
   global_x_max <- max(plot_data$upper_ci)

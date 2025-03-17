@@ -1,10 +1,10 @@
-Package: aggcomp
+Package: abxGrowth
 Type: Package
-Title: Antibiotics Growth G-computation 
+Title: AIPW and G-Computation methods for estimating growth outcomes under different antibiotic treatment settings
 Version: 0.1.0
 Author: Allison Codi
 Maintainer: Allison Codi <allison.codi@emory.edu>
-Description: This package implements traditional and longitudinal g-computation to measure the effect of antibiotics on growth. The package is applied in a meta-analysis of studies that measure growth outcomes for children with shigellosis.
+Description: This package implements AIPW and g-computation to estimate the effect of antibiotics on growth. 
 License: MIT + file LICENSE
 Depends: R (>= 3.0.0)
 Imports: 
@@ -16,7 +16,8 @@ Imports:
   fastDummies,
   dplyr, 
   labelled,
-  patchwork
+  patchwork,
+  SuperLearner
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
