@@ -8,29 +8,33 @@ plot_cis_subplots(
   results,
   abx_labels = NULL,
   inf_labels = NULL,
-  outcome_labels = NULL
+  outcome_labels = NULL,
+  study_labels = NULL
 )
 
 plot_cis_subplots(
   results,
   abx_labels = NULL,
   inf_labels = NULL,
-  outcome_labels = NULL
+  outcome_labels = NULL,
+  study_labels = NULL
 )
 }
 \arguments{
-\item{results}{\code{aggcomp_res} object or list of \code{aggcomp_res} objects}
+\item{results}{list of \code{aggcomp_res} objects or list of \code{agaipw_res} objects}
 
 \item{abx_labels}{label or list of labels to use for antibiotics variable (same length as results list)}
 
 \item{inf_labels}{label or list of labels to use for infection variable (same length as results list)}
 
 \item{outcome_labels}{label or list of labels to use for outcome variable (same length as results list)}
+
+\item{study_labels}{label or list of labels to use indicating which study result came from (same length as results list)}
 }
 \value{
 list of confidence interval ggplots
 
-list of confidence interval ggplots
+ggplot with subplots for each results object
 }
 \description{
 Function to make confidence interval plots of results with multiple subplots
