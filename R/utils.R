@@ -746,7 +746,7 @@ make_tables <- function(data,
 
 #' Function to make confidence interval plots of results
 #' 
-#' @param results `aggcomp_res` object or list of `aggcomp_res` objects
+#' @param results `aggcomp_res` object or `agaipw_res` object, or list of `aggcomp_res` and/or `agaipw_res` objects
 #' @param abx_label label or list of labels to use for antibiotics variable (same length as results list)
 #' @param inf_label label or list of labels to use for infection variable (same length as results list)
 #' @param outcome_label label or list of labels to use for outcome variable (same length as results list)
@@ -768,6 +768,7 @@ plot_cis <- function(results,
     
     res <- results[[i]]
     
+    # Get labels for plot if not passed in
     if(is.null(abx_labels)){
       abx_label <- res$parameters$abx_var_name
     } else {
@@ -776,6 +777,10 @@ plot_cis <- function(results,
     
     if(is.null(inf_labels)) {
       inf_label <- res$parameters$infection_var_name
+      # if no inf_var_name, use case_var_name (case control)
+      if(is.null(inf_label)){
+        inf_label <- res$parameters$case_var_name
+      }
     } else{
       inf_label <- inf_labels[[i]]
     }
@@ -787,16 +792,47 @@ plot_cis <- function(results,
     }
     
     plot_label <- paste0("Antibiotics: ", abx_label, ", Infection: ", inf_label) 
+    plot_data <- data.frame()
     
     # make dataframe for plotting
-    results_vec <- res$results
-    plot_data <- data.frame(
-      subgroup = c("Antibiotics", "No Antibiotics"),
-      pt_est = c(results_vec['effect_inf_abx'], results_vec['effect_inf_no_abx']),
-      lower_ci = c(results_vec['lower_ci_abx'], results_vec['lower_ci_no_abx']),
-      upper_ci = c(results_vec['upper_ci_abx'], results_vec['upper_ci_no_abx']),
-      label = plot_label
-    )
+    if(class(res) == "agaipw_res"){
+      # Plot AIPW 
+      res_df <- res$aipw_est$results_object$results_df
+      se_vec <- res$aipw_est$results_object$se
+      
+      abx_levels <- res_df$abx_levels
+      
+      for(i in 1:length(abx_levels)){
+        abx_level <- abx_levels[i]
+        tmp <- data.frame(subgroup = abx_level,
+                          pt_est = res_df$effect_inf_abx_level[res_df$abx_levels == abx_level],
+                          lower_ci = res_df$effect_inf_abx_level[res_df$abx_levels == abx_level] - 1.96*se_vec[paste0("effect_", abx_level)],
+                          upper_ci = res_df$effect_inf_abx_level[res_df$abx_levels == abx_level] + 1.96*se_vec[paste0("effect_", abx_level)],
+                          label = plot_label)
+        
+        plot_data <- rbind(plot_data, tmp)
+      }
+      
+    } else{
+      # Plot GComp
+      res_df <- res$results$pt_est
+      se_vec <- res$results$bootstrap_results
+      
+      abx_levels <- res_df$abx_levels
+      
+      for(i in 1:length(abx_levels)){
+        abx_level <- abx_levels[i]
+        tmp <- data.frame(subgroup = abx_level,
+                          pt_est = res_df$effect_inf_abx_level[res_df$abx_levels == abx_level],
+                          lower_ci = se_vec[[paste0('Abx = ', abx_level)]]$lower_ci_effect_inf_abx_level,
+                          upper_ci = se_vec[[paste0('Abx = ', abx_level)]]$upper_ci_effect_inf_abx_level,
+                          label = plot_label)
+        plot_data <- rbind(plot_data, tmp)
+      }
+    }
+    
+    # Make sure subgroup is treated as factor
+    plot_data$subgroup <- factor(plot_data$subgroup)
     
     x_loc <- max(plot_data$upper_ci) + 0.01
     
@@ -822,7 +858,6 @@ plot_cis <- function(results,
   
   return(plot_results)
 }
-
 
 #' Function to make confidence interval plots of results with multiple subplots
 #' 

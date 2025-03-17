@@ -9,7 +9,7 @@ plot_cis(results, abx_labels = NULL, inf_labels = NULL, outcome_labels = NULL)
 plot_cis(results, abx_labels = NULL, inf_labels = NULL, outcome_labels = NULL)
 }
 \arguments{
-\item{results}{\code{aggcomp_res} object or list of \code{aggcomp_res} objects}
+\item{results}{\code{aggcomp_res} object or \code{agaipw_res} object, or list of \code{aggcomp_res} and/or \code{agaipw_res} objects}
 
 \item{abx_label}{label or list of labels to use for antibiotics variable (same length as results list)}
 
