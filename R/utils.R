@@ -159,6 +159,189 @@ print.aggcomp_res <- function(x, ...){
   
 }
 
+#' Print the output of a \code{"agaipw_res"} object
+#' 
+#' @param x An \code{"agaipw_res"} object.
+#' @param ... Other arguments (not used)
+#'
+#' @method print agaipw_res
+#' @export
+print.agaipw_res <- function(x, ...){
+  
+  results_object <- x$aipw_est$results_object
+  
+  # AIPW for case_control analysis
+  if(class(results_object) == "aipw_case_control"){
+    
+    row_names <- c()
+    
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      name_inf <- paste0("E[Growth | Case = 1, Abx = ", results_object$results_df$abx_levels[i], "]")
+      row_names <- c(row_names, name_inf)
+    }
+    
+    row_names <- c(row_names, paste0("E[Growth | Healthy Control]"))
+    
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      name_effect <- paste0("Effect of case treated with ", results_object$results_df$abx_levels[i], " vs healthy control")
+      row_names <- c(row_names, name_effect)
+    }
+    
+    col_names <- c("Estimate", "Standard Error", "95% CI: Lower", "95% CI: Upper")
+    
+    res_df <- data.frame()
+    
+    # Add results for E[Growth | Infection = 1, Abx = abx_level]
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      abx_level <- results_object$results_df$abx_levels[i]
+      
+      pt_est <- results_object$results_df$abx_level_case[results_object$results_df$abx_levels == abx_level]
+      se <- results_object$se[paste0("case_eif_", abx_level)]
+      
+      tmp <- data.frame(pt_est,
+                        se,
+                        pt_est - 1.96*se,
+                        pt_est + 1.96*se)
+      
+      res_df <- rbind(res_df, tmp)
+      
+    }
+    
+    # Add results for E[Growth | Control]
+    control_res <- data.frame(results_object$results_df$abx_level_control[1],
+                              results_object$se["control_eif"],
+                              results_object$results_df$abx_level_control[1] - 1.96*results_object$se["control_eif"],
+                              results_object$results_df$abx_level_control[1] + 1.96*results_object$se["control_eif"])
+    
+    res_df <- rbind(as.matrix(res_df), as.matrix(control_res))
+    
+    # Add results for effects
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      abx_level <- results_object$results_df$abx_levels[i]
+      
+      pt_est <- results_object$results_df$effect_inf_abx_level[results_object$results_df$abx_levels == abx_level]
+      se <- results_object$se[paste0("effect_", abx_level)]
+      
+      tmp <- data.frame(pt_est,
+                        se,
+                        pt_est - 1.96*se,
+                        pt_est + 1.96*se)
+      
+      res_df <- rbind(as.matrix(res_df), as.matrix(tmp))
+      
+    }
+    
+    res_df <- data.frame(res_df)
+    colnames(res_df) <- col_names
+    rownames(res_df) <- row_names
+    
+    # Print header with dashed line
+    cat(paste("                                                  Effect of ", x$parameters$case_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups: Case-Control Study \n"))
+    cat(paste(rep("-", 165), collapse = ""), "\n")
+    cat(sprintf("%-90s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
+    cat(paste(rep("-", 165), collapse = ""), "\n")
+    
+    for(i in 1:nrow(res_df)){
+      row_to_print <- res_df[i, ]
+      
+      # Adjust the widths as needed
+      formatted_row <- sprintf("%-90s%-20s%-20s%-20s%-20s\n",
+                               row.names(row_to_print),
+                               round(row_to_print[1],4),
+                               round(row_to_print[2],4),
+                               round(row_to_print[3],4),
+                               round(row_to_print[4],4))
+      
+      # Print the formatted row
+      cat(paste(formatted_row))
+      
+    }
+    
+    cat(paste("\nNon-mediating covariates: ", paste(x$parameters$covariate_list, collapse = ", ")))
+    cat(paste("\nPathogen quantities: ", paste(x$parameters$pathogen_quantity_list, collapse = ", ")))
+    cat(paste("\nSeverity related covariates: ", paste(x$parameters$severity_list, collapse = ", "), "\n"))
+    
+  } else {
+    # Non-case control
+    
+    row_names <- c()
+    
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      name_inf_1 <- paste0("E[Growth | Infection = 1, Abx = ", results_object$results_df$abx_levels[i], "]")
+      name_inf_0 <- paste0("E[Growth | Infection = 0, Abx = ", results_object$results_df$abx_levels[i], "]")
+      name_effect <- paste0("Effect of infection in Abx = ", results_object$results_df$abx_levels[i], " subgroup")
+      
+      row_names <- c(row_names, name_inf_1, name_inf_0, name_effect)
+    }
+    
+    col_names <- c("Estimate", "Standard Error", "95% CI: Lower", "95% CI: Upper")
+    
+    res_df <- data.frame()
+    
+    for(i in 1:length(results_object$results_df$abx_levels)){
+      abx_level <- results_object$results_df$abx_levels[i]
+      
+      pt_est_inf <- results_object$results_df$abx_level_inf_1[results_object$results_df$abx_levels == abx_level]
+      pt_est_no_attr <- results_object$results_df$abx_level_inf_0[results_object$results_df$abx_levels == abx_level]
+      pt_est_effect <- results_object$results_df$effect_inf_abx_level[results_object$results_df$abx_levels == abx_level]
+      
+      se_inf <- results_object$se[paste0('inf_eif_', abx_level)]
+      se_no_attr <- results_object$se[paste0('no_attr_eif_', abx_level)]
+      se_effect <- results_object$se[paste0('effect_', abx_level)]
+      
+      tmp <- data.frame(c(pt_est_inf,
+                          pt_est_no_attr,
+                          pt_est_effect),
+                        c(se_inf,
+                          se_no_attr,
+                          se_effect),
+                        c(pt_est_inf - 1.96*se_inf,
+                          pt_est_no_attr - 1.96*se_no_attr,
+                          pt_est_effect - 1.96*se_effect),
+                        c(pt_est_inf + 1.96*se_inf,
+                          pt_est_no_attr + 1.96*se_no_attr,
+                          pt_est_effect + 1.96*se_effect))
+      
+      res_df <- rbind(res_df, tmp)
+      
+    }
+    
+    colnames(res_df) <- col_names
+    rownames(res_df) <- row_names
+    
+    # Print header with dashed line
+    cat(paste("                           Effect of ", x$parameters$infection_var_name, "on ", x$parameters$laz_var_name, "in ", x$parameters$abx_var_name, "subgroups \n"))
+    cat(paste(rep("-", 135), collapse = ""), "\n")
+    cat(sprintf("%-70s%-20s%-20s%-20s%-20s\n", "", col_names[1], col_names[2], col_names[3], col_names[4]))
+    cat(paste(rep("-", 135), collapse = ""), "\n")
+    
+    for(i in 1:nrow(res_df)){
+      row_to_print <- res_df[i, ]
+      
+      # Adjust the widths as needed
+      formatted_row <- sprintf("%-70s%-20s%-20s%-20s%-20s\n",
+                               row.names(row_to_print),
+                               round(row_to_print[1],4),
+                               round(row_to_print[2],4),
+                               round(row_to_print[3],4),
+                               round(row_to_print[4],4))
+      
+      # Print the formatted row
+      cat(paste(formatted_row))
+      
+    }
+    
+    cat(paste("\nNon-mediating covariates: ", paste(x$parameters$covariate_list, collapse = ", ")))
+    cat(paste("\nPathogen quantities: ", paste(x$parameters$pathogen_quantity_list, collapse = ", ")))
+    cat(paste("\nSeverity related covariates: ", paste(x$parameters$severity_list, collapse = ", "), "\n"))
+    
+  } 
+  
+  invisible(res_df)
+  
+}
+
+
 #' Helper function to combine multiple "aggcomp_res" objects into a CSV file of results
 #' 
 #' @param res_list list of "aggcomp_res" objects

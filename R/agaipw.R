@@ -103,6 +103,17 @@ agaipw <- function(data,
                                       child_id_var_name = child_id_var_name)
     }
     
+    parameters <- list(laz_var_name = laz_var_name,
+                       abx_var_name = abx_var_name,
+                       infection_var_name = infection_var_name,
+                       covariate_list = covariate_list,
+                       severity_list = severity_list,
+                       pathogen_quantity_list = pathogen_quantity_list,
+                       sl.library.outcome = sl.library.outcome,
+                       sl.library.treatment = sl.library.treatment,
+                       sl.library.infection = sl.library.infection,
+                       sl.library.missingness = sl.library.missingness)
+    
   } else{
     
     ## Case-control analysis
@@ -124,11 +135,27 @@ agaipw <- function(data,
                                   return_models = return_models,
                                   child_id_var_name = child_id_var_name)
     
+    parameters <- list(laz_var_name = laz_var_name,
+                       abx_var_name = abx_var_name,
+                       case_var_name = case_var_name,
+                       covariate_list = covariate_list,
+                       severity_list = severity_list,
+                       pathogen_quantity_list = pathogen_quantity_list,
+                       sl.library.outcome.case = sl.library.outcome.case,
+                       sl.library.outcome.control = sl.library.outcome.control,
+                       sl.library.treatment = sl.library.treatment,
+                       sl.library.infection = sl.library.infection,
+                       sl.library.missingness.case = sl.library.missingness.case,
+                       sl.library.missingness.control = sl.library.missingness.control)
+    
   }
   
-  class(aipw_est) <- "agaipw_res"
+  aipw_results <- list(aipw_est = aipw_est,
+                       parameters = parameters)
   
-  return(aipw_est)
+  class(aipw_results) <- "agaipw_res"
+  
+  return(aipw_results)
   
 }
 
