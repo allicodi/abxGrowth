@@ -215,9 +215,9 @@ abx_growth_gcomp <- function(data,
       data_level_1[[abx_var_name]] <- abx_level
       
       if(!att){
-        ybar_level_1 <- mean(stats::predict(model1, newdata = data_01, type = "response"), na.rm = TRUE)
+        ybar_level_1 <- mean(stats::predict(model1, newdata = data_level_1, type = "response"), na.rm = TRUE)
       } else{
-        data$yhat_level_1 <- stats::predict(model1, newdata = data_01, type = "response")
+        data$yhat_level_1 <- stats::predict(model1, newdata = data_level_1, type = "response")
         ybar_level_1 <- mean(data$yhat_level_1[data[[infection_var_name]] == 1], na.rm = TRUE)
       }
       
@@ -227,9 +227,9 @@ abx_growth_gcomp <- function(data,
       data_level_0[[abx_var_name]] <- abx_level
       
       if(!att){
-        ybar_level_0 <- mean(stats::predict(model_1, newdata = data_level_0), na.rm = TRUE)
+        ybar_level_0 <- mean(stats::predict(model1, newdata = data_level_0), na.rm = TRUE)
       } else {
-        data$yhat_level_0 <- stats::predict(model_1, newdata = data_level_0, type = "response")
+        data$yhat_level_0 <- stats::predict(model1, newdata = data_level_0, type = "response")
         ybar_level_0 <- mean(data$yhat_level_0[data[[infection_var_name]] == 1], na.rm = TRUE) 
       }
       
