@@ -84,7 +84,7 @@ agaipw(
 \item{child_id_var_name}{name of variable indicating child_id in data. Used to account for re-enrollment in study.}
 }
 \value{
-List of class \code{ag_aipw_res} containing objects for AIPW result, AIPW models.
+List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.
 }
 \description{
 Note parameters include all options across other diarrhea and case control analyses

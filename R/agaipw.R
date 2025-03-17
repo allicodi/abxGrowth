@@ -30,7 +30,7 @@
 #' 
 #' @export
 #' 
-#' @returns List of class `ag_aipw_res` containing objects for AIPW result, AIPW models.
+#' @returns List of class `agaipw_res` containing objects for AIPW result, AIPW models.
 agaipw <- function(data,
                     laz_var_name,
                     abx_var_name,
@@ -126,7 +126,7 @@ agaipw <- function(data,
     
   }
   
-  class(aipw_est) <- "ag_aipw_res"
+  class(aipw_est) <- "agaipw_res"
   
   return(aipw_est)
   
