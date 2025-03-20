@@ -22,7 +22,7 @@ aipw_other_diarrhea_2(
   sl.library.missingness = c("SL.glm"),
   v_folds = 5,
   return_models = FALSE,
-  child_id_var_name = NULL
+  first_id_var_name = NULL
 )
 }
 \arguments{
@@ -60,7 +60,7 @@ aipw_other_diarrhea_2(
 
 \item{return_models}{boolean return SuperLearner models. Default FALSE.}
 
-\item{child_id_var_name}{name of variable indicating child_id in data. Used to account for re-enrollment in study.}
+\item{first_id_var_name}{name of variable indicating first_id in data. Used to account for re-enrollment in study.}
 
 \item{sl.library.outcome.case}{list containing SuperLearner libraries to use for case outcome regression}
 

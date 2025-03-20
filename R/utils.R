@@ -457,6 +457,18 @@ one_hot_encode <- function(data,
     one_hot_severity_colnames <- colnames(severity_data)
   }
   
+  abx_data <- data[,abx_var_name, drop = FALSE]
+  if(any(sapply(abx_data, is.factor) == TRUE)){
+    one_hot_abx_data <- fastDummies::dummy_cols(abx_data,
+                                                     remove_first_dummy = FALSE,
+                                                     remove_selected_columns = TRUE,
+                                                     ignore_na = TRUE)
+    colnames(one_hot_abx_data) <- gsub(" ", "_", colnames(one_hot_abx_data)) # remove spaces here as well
+    one_hot_abx_colnames <- colnames(one_hot_abx_data)
+  } else {
+    one_hot_abx_colnames <- colnames(abx_data)
+  }
+  
   # If there is an interaction with site, get site names in one-hot encoded data to be used later to add interaction term
   if(site_interaction == "TRUE"){
     site_data <- data[,site_var_name, drop = FALSE]
@@ -474,6 +486,7 @@ one_hot_encode <- function(data,
               covariate_list = one_hot_covariate_colnames,
               covariate_list_control = one_hot_covariate_colnames_control,
               severity_list = one_hot_severity_colnames,
+              abx_var_name = one_hot_abx_colnames,
               site_var_names = one_hot_enroll_site_colnames))
 }
 

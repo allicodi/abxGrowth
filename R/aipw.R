@@ -15,7 +15,7 @@
 #' @param sl.library.missingness list containing SuperLearner libraries to use for outcome missingness model
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
-#' @param child_id_var_name name of variable indicating child_id in data. Used to account for re-enrollment in study. 
+#' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
 #' 
 #' @keywords internal
 #' 
@@ -35,7 +35,7 @@ aipw_other_diarrhea <- function(data,
                                 sl.library.missingness = c("SL.glm"),
                                 v_folds = 5,
                                 return_models = FALSE,
-                                child_id_var_name = NULL){
+                                first_id_var_name = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -374,11 +374,11 @@ aipw_other_diarrhea <- function(data,
   # Compute effects for all levels of abx
   
   # Get id for each participant and recreate EIFs based on this if present
-  if(!is.null(child_id_var_name)){
-    child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
-    child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
+  if(!is.null(first_id_var_name)){
+    first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
+    first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
     
-    scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+    scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
   }else{
     scaled_matrix <- eif_matrix
   }
@@ -469,7 +469,7 @@ aipw_other_diarrhea <- function(data,
 #' @param sl.library.missingness list containing SuperLearner libraries to use for outcome missingness model
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
-#' @param child_id_var_name name of variable indicating child_id in data. Used to account for re-enrollment in study. 
+#' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
 #' 
 #' @keywords internal
 #' 
@@ -491,7 +491,7 @@ aipw_other_diarrhea_2 <- function(data,
                                   sl.library.missingness = c("SL.glm"),
                                   v_folds = 5,
                                   return_models = FALSE,
-                                  child_id_var_name = NULL){
+                                  first_id_var_name = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -903,11 +903,11 @@ aipw_other_diarrhea_2 <- function(data,
   cov_matrix <- stats::cov(eif_matrix)
   
   # Get id for each participant and recreate EIFs based on this if present
-  if(!is.null(child_id_var_name)){
-    child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
-    child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
+  if(!is.null(first_id_var_name)){
+    first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
+    first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
     
-    scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+    scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
   } else{
     scaled_matrix <- eif_matrix
   }
@@ -1002,7 +1002,7 @@ aipw_other_diarrhea_2 <- function(data,
 #' @param sl.library.missingness.control list containing SuperLearner libraries to use for outcome missingness model (controls)
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
-#' @param child_id_var_name name of variable indicating child_id in data. Used to account for re-enrollment in study. 
+#' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
 #' 
 #' @keywords internal
 #' 
@@ -1023,7 +1023,7 @@ aipw_case_control <- function(data,
                               sl.library.missingness.control = c("SL.glm"),
                               v_folds = 5,
                               return_models = FALSE,
-                              child_id_var_name = NULL){
+                              first_id_var_name = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -1317,10 +1317,10 @@ aipw_case_control <- function(data,
   # Compute effects for all levels of abx
   
   # Get id for each participant and recreate EIFs based on this if present
-  if(!is.null(child_id_var_name)){
-    child_id_eif_matrix <- cbind(data.frame(child_id = data[[child_id_var_name]]), eif_matrix)
-    child_id_eif_matrix <- aggregate(. ~ child_id, data = child_id_eif_matrix, FUN = sum)
-    scaled_matrix <- child_id_eif_matrix[,-c(1)] * (nrow(child_id_eif_matrix) / nrow(eif_matrix))
+  if(!is.null(first_id_var_name)){
+    first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
+    first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
+    scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
   }else{
     scaled_matrix <- eif_matrix
   }

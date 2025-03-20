@@ -29,7 +29,7 @@ agaipw(
   seed = 12345,
   v_folds = 5,
   return_models = FALSE,
-  child_id_var_name = NULL
+  first_id_var_name = NULL
 )
 }
 \arguments{
@@ -81,7 +81,7 @@ agaipw(
 
 \item{return_models}{boolean return SuperLearner models. Default FALSE.}
 
-\item{child_id_var_name}{name of variable indicating child_id in data. Used to account for re-enrollment in study.}
+\item{first_id_var_name}{name of variable indicating unique participant identifier in data. Used to account for re-enrollment in study.}
 }
 \value{
 List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.

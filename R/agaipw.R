@@ -26,7 +26,7 @@
 #' @param seed seed for reproducibility in SuperLearner cross-validation
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
-#' @param child_id_var_name name of variable indicating child_id in data. Used to account for re-enrollment in study. 
+#' @param first_id_var_name name of variable indicating unique participant identifier in data. Used to account for re-enrollment in study. 
 #' 
 #' @export
 #' 
@@ -55,7 +55,7 @@ agaipw <- function(data,
                     seed = 12345,
                     v_folds = 5,
                     return_models = FALSE,
-                    child_id_var_name = NULL){
+                    first_id_var_name = NULL){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -82,7 +82,7 @@ agaipw <- function(data,
                                         sl.library.missingness = sl.library.missingness,
                                         v_folds = v_folds,
                                         return_models = return_models,
-                                        child_id_var_name = child_id_var_name)
+                                        first_id_var_name = first_id_var_name)
     } else {
       # Do not include second stage outcome regression
       aipw_est <- aipw_other_diarrhea(data = data,
@@ -100,7 +100,7 @@ agaipw <- function(data,
                                       sl.library.missingness = sl.library.missingness,
                                       v_folds = v_folds,
                                       return_models = return_models,
-                                      child_id_var_name = child_id_var_name)
+                                      first_id_var_name = first_id_var_name)
     }
     
     parameters <- list(laz_var_name = laz_var_name,
@@ -133,7 +133,7 @@ agaipw <- function(data,
                                   sl.library.missingness.control = sl.library.missingness.control,
                                   v_folds = v_folds,
                                   return_models = return_models,
-                                  child_id_var_name = child_id_var_name)
+                                  first_id_var_name = first_id_var_name)
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,
