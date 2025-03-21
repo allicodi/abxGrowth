@@ -27,6 +27,9 @@
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
 #' @param first_id_var_name name of variable indicating unique participant identifier in data. Used to account for re-enrollment in study. 
+#' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
+#' @param msm_var_name name of variable to use for msm
+#' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' 
 #' @export
 #' 
@@ -55,7 +58,10 @@ agaipw <- function(data,
                     seed = 12345,
                     v_folds = 5,
                     return_models = FALSE,
-                    first_id_var_name = NULL){
+                    first_id_var_name = NULL,
+                    msm = FALSE,
+                    msm_var_name = NULL,
+                    msm_formula = NULL){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -82,7 +88,10 @@ agaipw <- function(data,
                                         sl.library.missingness = sl.library.missingness,
                                         v_folds = v_folds,
                                         return_models = return_models,
-                                        first_id_var_name = first_id_var_name)
+                                        first_id_var_name = first_id_var_name,
+                                        msm = msm,
+                                        msm_var_name = msm_var_name,
+                                        msm_formula = msm_formula)
     } else {
       # Do not include second stage outcome regression
       aipw_est <- aipw_other_diarrhea(data = data,
@@ -100,7 +109,10 @@ agaipw <- function(data,
                                       sl.library.missingness = sl.library.missingness,
                                       v_folds = v_folds,
                                       return_models = return_models,
-                                      first_id_var_name = first_id_var_name)
+                                      first_id_var_name = first_id_var_name,
+                                      msm = msm,
+                                      msm_var_name = msm_var_name,
+                                      msm_formula = msm_formula)
     }
     
     parameters <- list(laz_var_name = laz_var_name,
@@ -112,7 +124,10 @@ agaipw <- function(data,
                        sl.library.outcome = sl.library.outcome,
                        sl.library.treatment = sl.library.treatment,
                        sl.library.infection = sl.library.infection,
-                       sl.library.missingness = sl.library.missingness)
+                       sl.library.missingness = sl.library.missingness,
+                       msm = msm,
+                       msm_var_name = msm_var_name,
+                       msm_formula = msm_formula)
     
   } else{
     
@@ -133,7 +148,10 @@ agaipw <- function(data,
                                   sl.library.missingness.control = sl.library.missingness.control,
                                   v_folds = v_folds,
                                   return_models = return_models,
-                                  first_id_var_name = first_id_var_name)
+                                  first_id_var_name = first_id_var_name,
+                                  msm = msm,
+                                  msm_var_name = msm_var_name,
+                                  msm_formula = msm_formula)
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,
@@ -146,7 +164,10 @@ agaipw <- function(data,
                        sl.library.treatment = sl.library.treatment,
                        sl.library.infection = sl.library.infection,
                        sl.library.missingness.case = sl.library.missingness.case,
-                       sl.library.missingness.control = sl.library.missingness.control)
+                       sl.library.missingness.control = sl.library.missingness.control,
+                       msm = msm,
+                       msm_var_name = msm_var_name,
+                       msm_formula = msm_formula)
     
   }
   

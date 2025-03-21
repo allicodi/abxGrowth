@@ -16,6 +16,9 @@
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
 #' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
+#' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
+#' @param msm_var_name name of variable to use for msm
+#' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' 
 #' @keywords internal
 #' 
@@ -35,7 +38,10 @@ aipw_other_diarrhea <- function(data,
                                 sl.library.missingness = c("SL.glm"),
                                 v_folds = 5,
                                 return_models = FALSE,
-                                first_id_var_name = NULL){
+                                first_id_var_name = NULL,
+                                msm = FALSE,
+                                msm_var_name = NULL,
+                                msm_formula = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -112,6 +118,12 @@ aipw_other_diarrhea <- function(data,
   colnames(outcome_vectors_1a) <- paste0("abx_", abx_levels)
   colnames(outcome_vectors_1b) <- paste0("abx_", abx_levels)
   
+  # If looking at effect heterogeneity, create matrix to hold difference in outcome vectors
+  if(msm){
+    outcome_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    colnames(outcome_msm) <- paste0("abx_", abx_levels)
+  }
+  
   # Iterate through each abx level
   for (i in 1:length(abx_levels)) {
     abx_level <- abx_levels[i]
@@ -131,6 +143,43 @@ aipw_other_diarrhea <- function(data,
                                                                                        covariate_list)], type = "response")$pred
   }
   
+  if(msm){
+    # Subtract predictions
+    outcome_msm <- outcome_vectors_1a - outcome_vectors_1b
+    
+    msm_vectors <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    colnames(msm_vectors) <- paste0("abx_", abx_levels)
+    
+    if(return_models){
+      msm_model_list <- vector("list", length = length(abx_levels))
+    }
+    
+    for(i in 1:length(abx_levels)){
+      abx_level <- abx_levels[i]
+      abx_level_name <- paste0("abx_", abx_level)
+      
+      # Fit difference in predictions on msm_formula
+      msm_formula_full <- as.formula(paste0(abx_level_name, " ~ ", msm_formula))
+      
+      msm_data <- setNames(
+        data.frame(outcome_msm[, i], data[[msm_var_name]], data[[infection_var_name]]), 
+        c(abx_level_name, msm_var_name, infection_var_name) 
+      )
+      
+      effect_hetero_msm <- stats::glm(msm_formula_full, 
+                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
+                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous?
+      
+      # QUESTION does this not matter because we just need model for plotting
+      msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
+      
+      if(return_models){
+        msm_model_list[[i]] <- effect_hetero_msm
+      }
+      
+    }
+    
+  }
   
   # ------------------------------------------------------------
   # STEP 2: Fit & predict from propensity models
@@ -429,17 +478,30 @@ aipw_other_diarrhea <- function(data,
   
   if(return_models){
     # Make list of models
-    aipw_models <- list(outcome_model_1a = outcome_model_1a,
-                        outcome_model_1b = outcome_model_1b,
-                        prop_model_1a_list = prop_model_1a_list,
-                        prop_model_1b_list = prop_model_1b_list,
-                        prop_model_2a_1 = prop_model_2a_1,
-                        prop_model_2a_2 = prop_model_2a_2,
-                        prop_model_3a = prop_model_3a,
-                        prop_model_3b = prop_model_3b)
+    if(msm){
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_1b_list = prop_model_1b_list,
+                          prop_model_2a_1 = prop_model_2a_1,
+                          prop_model_2a_2 = prop_model_2a_2,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b,
+                          msm_model_list = msm_model_list)
+    } else{
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_1b_list = prop_model_1b_list,
+                          prop_model_2a_1 = prop_model_2a_1,
+                          prop_model_2a_2 = prop_model_2a_2,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b)
+    }
     
     return(list(results_object = results_object,
                 aipw_models = aipw_models))
+    
   } else{
     # Return NULL models
     return(list(results_object = results_object,
