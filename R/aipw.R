@@ -486,12 +486,22 @@ aipw_other_diarrhea <- function(data,
   cov_matrix <- stats::cov(eif_matrix_scaled)
   eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
   
-  results_object <- list(results_df = results_df,
-                         eif_matrix = eif_matrix_scaled,
-                         se = eif_hat)
+  # Get marginal effect estimates for MSM (if applicable) and create results object
+  if(msm){
+    marginal_effect_estimates <- colMeans(msm_vectors[inf_attr_idx, , drop = FALSE])
+    
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat,
+                           marginal_effect_estimates = marginal_effect_estimates)
+  } else{
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat)
+  }
   
   class(results_object) <- "aipw_other_diarrhea"
-  
+
   if(return_models){
     # Make list of models
     if(msm){
@@ -1090,9 +1100,19 @@ aipw_other_diarrhea_2 <- function(data,
   cov_matrix <- stats::cov(eif_matrix_scaled)
   eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
   
-  results_object <- list(results_df = results_df,
-                         eif_matrix = eif_matrix_scaled,
-                         se = eif_hat)
+  # Get marginal effect estimates for MSM (if applicable) and create results object
+  if(msm){
+    marginal_effect_estimates <- colMeans(msm_vectors[inf_attr_idx, , drop = FALSE])
+    
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat,
+                           marginal_effect_estimates = marginal_effect_estimates)
+  } else{
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat)
+  }
   
   class(results_object) <- "aipw_other_diarrhea_2"
   
@@ -1572,9 +1592,19 @@ aipw_case_control <- function(data,
   cov_matrix <- stats::cov(eif_matrix_scaled)
   eif_hat <- sqrt( diag(cov_matrix) / nrow(eif_matrix_scaled) )
   
-  results_object <- list(results_df = results_df,
-                         eif_matrix = eif_matrix_scaled,
-                         se = eif_hat)
+  # Get marginal effect estimates for MSM (if applicable) and create results object
+  if(msm){
+    marginal_effect_estimates <- colMeans(msm_vectors[case_data_idx, , drop = FALSE])
+    
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat,
+                           marginal_effect_estimates = marginal_effect_estimates)
+  } else{
+    results_object <- list(results_df = results_df,
+                           eif_matrix = eif_matrix_scaled,
+                           se = eif_hat)
+  }
   
   class(results_object) <- "aipw_case_control"
   
