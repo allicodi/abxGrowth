@@ -47,6 +47,11 @@ aipw_other_diarrhea <- function(data,
   # STEP 0: Create subsets of data for model fitting
   # ------------------------------------------------------------
   
+  # Rename abx levels if spaces in them
+  abx_levels <- levels(factor(data[[abx_var_name]]))
+  abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
+  data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
+  
   ## Subset 0a: subset shigella (or other infection variable) cases
   inf_attr_idx <- which(data[[infection_var_name]] == 1)
   sub_inf_attr <- data[inf_attr_idx,]
@@ -161,6 +166,7 @@ aipw_other_diarrhea <- function(data,
       # Fit difference in predictions on msm_formula
       msm_formula_full <- as.formula(paste0(abx_level_name, " ~ ", msm_formula))
       
+      # dataframe with difference in outcomes, variable of interest, infection var (for subsetting)
       msm_data <- setNames(
         data.frame(outcome_msm[, i], data[[msm_var_name]], data[[infection_var_name]]), 
         c(abx_level_name, msm_var_name, infection_var_name) 
@@ -168,9 +174,8 @@ aipw_other_diarrhea <- function(data,
       
       effect_hetero_msm <- stats::glm(msm_formula_full, 
                                       data = msm_data[msm_data[[infection_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
-                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous?
+                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
       
-      # QUESTION does this not matter because we just need model for plotting
       msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
       
       if(return_models){
@@ -532,6 +537,9 @@ aipw_other_diarrhea <- function(data,
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
 #' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
+#' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
+#' @param msm_var_name name of variable to use for msm
+#' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' 
 #' @keywords internal
 #' 
@@ -553,11 +561,19 @@ aipw_other_diarrhea_2 <- function(data,
                                   sl.library.missingness = c("SL.glm"),
                                   v_folds = 5,
                                   return_models = FALSE,
-                                  first_id_var_name = NULL){
+                                  first_id_var_name = NULL,
+                                  msm = FALSE,
+                                  msm_var_name = NULL,
+                                  msm_formula = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
   # ------------------------------------------------------------
+  
+  # Rename abx levels if spaces in them
+  abx_levels <- levels(factor(data[[abx_var_name]]))
+  abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
+  data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
   
   ## Subset 0a: subset shigella (or other infection variable) attr cases
   inf_attr_idx <- which(data[[infection_var_name]] == 1)
@@ -698,6 +714,44 @@ aipw_other_diarrhea_2 <- function(data,
     if(return_models){
       outcome_model_2b_list[[i]] <- outcome_model_2b
     }
+  }
+  
+  if(msm){
+    # Subtract predictions
+    outcome_msm <- outcome_vectors_1a - outcome_vectors_2b
+    
+    msm_vectors <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    colnames(msm_vectors) <- paste0("abx_", abx_levels)
+    
+    if(return_models){
+      msm_model_list <- vector("list", length = length(abx_levels))
+    }
+    
+    for(i in 1:length(abx_levels)){
+      abx_level <- abx_levels[i]
+      abx_level_name <- paste0("abx_", abx_level)
+      
+      # Fit difference in predictions on msm_formula
+      msm_formula_full <- as.formula(paste0(abx_level_name, " ~ ", msm_formula))
+      
+      # dataframe with difference in outcomes, variable of interest, infection var (for subsetting)
+      msm_data <- setNames(
+        data.frame(outcome_msm[, i], data[[msm_var_name]], data[[infection_var_name]]), 
+        c(abx_level_name, msm_var_name, infection_var_name) 
+      )
+      
+      effect_hetero_msm <- stats::glm(msm_formula_full, 
+                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
+                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
+      
+      msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
+      
+      if(return_models){
+        msm_model_list[[i]] <- effect_hetero_msm
+      }
+      
+    }
+    
   }
   
   # ------------------------------------------------------------
@@ -1022,15 +1076,28 @@ aipw_other_diarrhea_2 <- function(data,
   
   if(return_models){
     # Make list of models
-    aipw_models <- list(outcome_model_1a = outcome_model_1a,
-                        outcome_model_1b = outcome_model_1b,
-                        outcome_model_2b_list = outcome_model_2b_list,
-                        prop_model_1a_list = prop_model_1a_list,
-                        prop_model_1b_list = prop_model_1b_list,
-                        prop_model_2a_1 = prop_model_2a_1,
-                        prop_model_2a_2 = prop_model_2a_2,
-                        prop_model_3a = prop_model_3a,
-                        prop_model_3b = prop_model_3b)
+    if(msm){
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          outcome_model_2b_list = outcome_model_2b_list,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_1b_list = prop_model_1b_list,
+                          prop_model_2a_1 = prop_model_2a_1,
+                          prop_model_2a_2 = prop_model_2a_2,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b,
+                          msm_model_list = msm_model_list)
+    } else{
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          outcome_model_2b_list = outcome_model_2b_list,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_1b_list = prop_model_1b_list,
+                          prop_model_2a_1 = prop_model_2a_1,
+                          prop_model_2a_2 = prop_model_2a_2,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b)
+    }
     
     return(list(results_object = results_object,
                 aipw_models = aipw_models))
@@ -1065,6 +1132,9 @@ aipw_other_diarrhea_2 <- function(data,
 #' @param v_folds number of cross-validation folds to use in SuperLearner
 #' @param return_models boolean return SuperLearner models. Default FALSE.
 #' @param first_id_var_name name of variable indicating first_id in data. Used to account for re-enrollment in study. 
+#' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
+#' @param msm_var_name name of variable to use for msm
+#' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' 
 #' @keywords internal
 #' 
@@ -1085,11 +1155,19 @@ aipw_case_control <- function(data,
                               sl.library.missingness.control = c("SL.glm"),
                               v_folds = 5,
                               return_models = FALSE,
-                              first_id_var_name = NULL){
+                              first_id_var_name = NULL,
+                              msm = FALSE,
+                              msm_var_name = NULL,
+                              msm_formula = NULL){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
   # ------------------------------------------------------------
+  
+  # Rename abx levels if spaces in them
+  abx_levels <- levels(factor(data[[abx_var_name]]))
+  abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
+  data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
   
   # get case vs control data
   case_data <- data[data[[case_var_name]] == 1,]
@@ -1179,6 +1257,48 @@ aipw_case_control <- function(data,
   outcome_vectors_1a[is.na(outcome_vectors_1a)] <- 0
   
   outcome_vectors_1b[, 1] <- stats::predict(outcome_model_1b, newdata = data[,covariate_list], type = "response")$pred
+  
+  if(msm){
+    
+    # Replicate outcome_vectors_1b across columns to match the dimensions of outcome_vectors_1a
+    outcome_matrix_1b <- data.frame(matrix(outcome_vectors_1b[, 1], nrow = nrow(data), ncol = length(abx_levels), byrow = FALSE))
+    
+    # Subtract predictions
+    outcome_msm <- outcome_vectors_1a - outcome_matrix_1b
+    
+    msm_vectors <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+    colnames(msm_vectors) <- paste0("abx_", abx_levels)
+    
+    if(return_models){
+      msm_model_list <- vector("list", length = length(abx_levels))
+    }
+    
+    for(i in 1:length(abx_levels)){
+      abx_level <- abx_levels[i]
+      abx_level_name <- paste0("abx_", abx_level)
+      
+      # Fit difference in predictions on msm_formula
+      msm_formula_full <- as.formula(paste0(abx_level_name, " ~ ", msm_formula))
+      
+      # dataframe with difference in outcomes, variable of interest, infection var (for subsetting)
+      msm_data <- setNames(
+        data.frame(outcome_msm[, i], data[[msm_var_name]], data[[case_var_name]]), 
+        c(abx_level_name, msm_var_name, case_var_name) 
+      )
+      
+      effect_hetero_msm <- stats::glm(msm_formula_full, 
+                                      data = msm_data[msm_data[[case_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
+                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
+      
+      msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
+      
+      if(return_models){
+        msm_model_list[[i]] <- effect_hetero_msm
+      }
+      
+    }
+    
+  }
   
   # ------------------------------------------------------------
   # STEP 2: Fit & predict from propensity models
@@ -1428,13 +1548,22 @@ aipw_case_control <- function(data,
   
   if(return_models){
     # Make list of models
-    aipw_models <- list(outcome_model_1a = outcome_model_1a,
-                        outcome_model_1b = outcome_model_1b,
-                        prop_model_1a_list = prop_model_1a_list,
-                        prop_model_2a = prop_model_2a,
-                        prop_model_3a = prop_model_3a,
-                        prop_model_3b = prop_model_3b)
-    
+    if(msm){
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_2a = prop_model_2a,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b,
+                          msm_model_list = msm_model_list)
+    } else{
+      aipw_models <- list(outcome_model_1a = outcome_model_1a,
+                          outcome_model_1b = outcome_model_1b,
+                          prop_model_1a_list = prop_model_1a_list,
+                          prop_model_2a = prop_model_2a,
+                          prop_model_3a = prop_model_3a,
+                          prop_model_3b = prop_model_3b)
+    }
     return(list(results_object = results_object,
                 aipw_models = aipw_models))
   } else{

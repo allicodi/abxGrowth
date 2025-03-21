@@ -20,7 +20,10 @@ aipw_other_diarrhea(
   sl.library.missingness = c("SL.glm"),
   v_folds = 5,
   return_models = FALSE,
-  first_id_var_name = NULL
+  first_id_var_name = NULL,
+  msm = FALSE,
+  msm_var_name = NULL,
+  msm_formula = NULL
 )
 }
 \arguments{
@@ -55,6 +58,12 @@ aipw_other_diarrhea(
 \item{return_models}{boolean return SuperLearner models. Default FALSE.}
 
 \item{first_id_var_name}{name of variable indicating first_id in data. Used to account for re-enrollment in study.}
+
+\item{msm}{boolean indicating use of MSM for effect heterogeneity, default FALSE}
+
+\item{msm_var_name}{name of variable to use for msm}
+
+\item{msm_formula}{chatacter vector with formula to use for msm if msm TRUE}
 }
 \value{
 List containing \code{aipw_other_diarrhea} object, models (if return_models = TRUE). \code{aipw_other_diarrhea} object contains dataframe with results, covariance matrix, standard errors.

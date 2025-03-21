@@ -29,7 +29,10 @@ agaipw(
   seed = 12345,
   v_folds = 5,
   return_models = FALSE,
-  first_id_var_name = NULL
+  first_id_var_name = NULL,
+  msm = FALSE,
+  msm_var_name = NULL,
+  msm_formula = NULL
 )
 }
 \arguments{
@@ -82,6 +85,12 @@ agaipw(
 \item{return_models}{boolean return SuperLearner models. Default FALSE.}
 
 \item{first_id_var_name}{name of variable indicating unique participant identifier in data. Used to account for re-enrollment in study.}
+
+\item{msm}{boolean indicating use of MSM for effect heterogeneity, default FALSE}
+
+\item{msm_var_name}{name of variable to use for msm}
+
+\item{msm_formula}{chatacter vector with formula to use for msm if msm TRUE}
 }
 \value{
 List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.
