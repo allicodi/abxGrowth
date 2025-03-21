@@ -9,6 +9,7 @@ aipw_other_diarrhea_2(
   laz_var_name,
   abx_var_name,
   infection_var_name,
+  site_var_name,
   covariate_list,
   severity_list,
   pathogen_quantity_list = NA,
@@ -36,6 +37,8 @@ aipw_other_diarrhea_2(
 \item{abx_var_name}{name of binary antibiotic variable}
 
 \item{infection_var_name}{name of binary infection variable (for other diarrhea analyses; case_control = FALSE)}
+
+\item{site_var_name}{name of covariate for site (to exclude from propensity models)}
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 

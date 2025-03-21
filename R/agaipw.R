@@ -7,6 +7,7 @@
 #' @param abx_var_name name of binary antibiotic variable
 #' @param infection_var_name name of binary infection variable (for other diarrhea analyses; case_control = FALSE)
 #' @param case_var_name name of variable indicating case (for case control analysis; case_control = TRUE)
+#' @param site_var_name name of covariate for site (to exclude from propensity models)
 #' @param covariate_list character vector containing names of baseline covariates
 #' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, use AIPW without second stage regression
 #' @param pathogen_quantity_list character vector containing name(s) of pathogen quantity variables in dataset
@@ -39,6 +40,7 @@ agaipw <- function(data,
                     abx_var_name,
                     infection_var_name = NA,
                     case_var_name = NA,
+                    site_var_name = NA,
                     covariate_list, 
                     severity_list = NULL,
                     pathogen_quantity_list = NULL,
@@ -75,6 +77,7 @@ agaipw <- function(data,
                                         laz_var_name = laz_var_name,
                                         abx_var_name = abx_var_name,
                                         infection_var_name = infection_var_name,
+                                        site_var_name = site_var_name,
                                         covariate_list = covariate_list,
                                         severity_list = severity_list,
                                         pathogen_quantity_list = pathogen_quantity_list,
@@ -98,6 +101,7 @@ agaipw <- function(data,
                                       laz_var_name = laz_var_name,
                                       abx_var_name = abx_var_name,
                                       infection_var_name = infection_var_name,
+                                      site_var_name = site_var_name,
                                       covariate_list = covariate_list,
                                       pathogen_quantity_list = pathogen_quantity_list,
                                       pathogen_attributable_list = pathogen_attributable_list,
@@ -136,6 +140,7 @@ agaipw <- function(data,
                                   laz_var_name = laz_var_name,
                                   abx_var_name = abx_var_name,
                                   case_var_name = case_var_name,
+                                  site_var_name = site_var_name,
                                   covariate_list = covariate_list,
                                   severity_list = severity_list,
                                   pathogen_quantity_list = pathogen_quantity_list,

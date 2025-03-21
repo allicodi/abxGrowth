@@ -9,6 +9,7 @@ aipw_case_control(
   laz_var_name,
   abx_var_name,
   case_var_name,
+  site_var_name,
   covariate_list,
   severity_list,
   pathogen_quantity_list = NULL,
@@ -35,6 +36,8 @@ aipw_case_control(
 \item{abx_var_name}{name of binary antibiotic variable}
 
 \item{case_var_name}{name of variable indicating case (for case control analysis; case_control = TRUE)}
+
+\item{site_var_name}{name of covariate for site (to exclude from propensity models)}
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 

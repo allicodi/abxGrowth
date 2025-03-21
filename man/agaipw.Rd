@@ -10,6 +10,7 @@ agaipw(
   abx_var_name,
   infection_var_name = NA,
   case_var_name = NA,
+  site_var_name = NA,
   covariate_list,
   severity_list = NULL,
   pathogen_quantity_list = NULL,
@@ -45,6 +46,8 @@ agaipw(
 \item{infection_var_name}{name of binary infection variable (for other diarrhea analyses; case_control = FALSE)}
 
 \item{case_var_name}{name of variable indicating case (for case control analysis; case_control = TRUE)}
+
+\item{site_var_name}{name of covariate for site (to exclude from propensity models)}
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 
