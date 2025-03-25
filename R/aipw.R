@@ -5,6 +5,7 @@
 #' @param abx_var_name name of binary antibiotic variable
 #' @param infection_var_name name of binary infection variable (for other diarrhea analyses; case_control = FALSE)
 #' @param site_var_name name of covariate for site (to exclude from propensity models)
+#' @param followup_var_names name of time to followup related variables (to exclude from missingness propensity models)
 #' @param covariate_list character vector containing names of baseline covariates
 #' @param pathogen_quantity_list character vector containing name(s) of pathogen quantity variables in dataset
 #' @param pathogen_attributable_list character vector containing name(s) of binary pathogen attributable variables in dataset. Used to identify diarrhea with no etiology if is.null(no_etiology_var_name)
@@ -20,6 +21,7 @@
 #' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
+#' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
 #' 
 #' @keywords internal
 #' 
@@ -29,6 +31,7 @@ aipw_other_diarrhea <- function(data,
                                 abx_var_name,
                                 infection_var_name,
                                 site_var_name,
+                                followup_var_names,
                                 covariate_list,
                                 pathogen_quantity_list = NULL,
                                 pathogen_attributable_list = NULL,
@@ -43,7 +46,8 @@ aipw_other_diarrhea <- function(data,
                                 first_id_var_name = NULL,
                                 msm = FALSE,
                                 msm_var_name = NULL,
-                                msm_formula = NULL){
+                                msm_formula = NULL,
+                                ps_trunc_level = 0.01){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -195,6 +199,15 @@ aipw_other_diarrhea <- function(data,
   # If site in covariate_list, remove
   if(!any(is.na(site_var_name))){
     covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  } else{
+    covariate_list_no_site <- covariate_list
+  }
+  
+  # If followup_days related variables, remove from missingness models
+  if(!any(is.na(followup_var_names))){
+    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+  } else{
+    covariate_list_no_site_followup <- covariate_list_no_site
   }
   
   prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
@@ -329,8 +342,8 @@ aipw_other_diarrhea <- function(data,
   ## Part 3: Propensity models for missingness
   
   # Data without site
-  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site , drop = FALSE]
-  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site , drop = FALSE]
+  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site_followup , drop = FALSE]
+  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site_followup, drop = FALSE]
   
   ## Missingness model in infection attributable
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
@@ -356,9 +369,9 @@ aipw_other_diarrhea <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site)], type = "response")$pred
+                                                                                covariate_list_no_site_followup)], type = "response")$pred
     prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site)], type = "response")$pred
+                                                                                covariate_list_no_site_followup)], type = "response")$pred
   }
   
   # -------------------------------------------------
@@ -376,6 +389,23 @@ aipw_other_diarrhea <- function(data,
   
   colnames(inf_eifs) <- paste0("inf_eif_", abx_levels)
   colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
+  
+  # Truncate any large propensity scores
+  if(!is.na(ps_trunc_level)){
+    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
+    
+    truncate_ps <- function(mat, ps_trunc_level){
+      mat[mat < ps_trunc_level] <- ps_trunc_level
+      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+      return(mat)
+    }
+    
+    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
+    prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
+    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
+    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
+    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+  }
   
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]
@@ -562,6 +592,7 @@ aipw_other_diarrhea <- function(data,
 #' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
+#' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
 #' 
 #' @keywords internal
 #' 
@@ -571,6 +602,7 @@ aipw_other_diarrhea_2 <- function(data,
                                   abx_var_name,
                                   infection_var_name,
                                   site_var_name,
+                                  followup_var_names,
                                   covariate_list,
                                   severity_list,
                                   pathogen_quantity_list = NA,
@@ -587,7 +619,8 @@ aipw_other_diarrhea_2 <- function(data,
                                   first_id_var_name = NULL,
                                   msm = FALSE,
                                   msm_var_name = NULL,
-                                  msm_formula = NULL){
+                                  msm_formula = NULL,
+                                  ps_trunc_level = 0.01){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -623,7 +656,7 @@ aipw_other_diarrhea_2 <- function(data,
   if(!is.null(no_etiology_var_name)){
     sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1),]
   } else{
-    I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list]) == 0),
+    I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list], na.rm = TRUE) == 0),
                         1, 0)
     data$no_etiology <- I_no_attr
     no_etiology_var_name <- "no_etiology"
@@ -781,9 +814,18 @@ aipw_other_diarrhea_2 <- function(data,
   # STEP 2: Fit & predict from propensity models
   # ------------------------------------------------------------
   
-  # If site in covariate_list, remove (any for if site one hot encoded)
+  # If site in covariate_list, remove
   if(!any(is.na(site_var_name))){
     covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  } else{
+    covariate_list_no_site <- covariate_list
+  }
+  
+  # If followup_days related variables, remove from missingness models
+  if(!any(is.na(followup_var_names))){
+    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+  } else{
+    covariate_list_no_site_followup <- covariate_list_no_site
   }
   
   # Create matrices to hold predictions from propensity models
@@ -932,8 +974,8 @@ aipw_other_diarrhea_2 <- function(data,
   ###############################################
   
   # Data without site
-  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site , drop = FALSE]
-  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site , drop = FALSE]
+  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site_followup , drop = FALSE]
+  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site_followup , drop = FALSE]
   
   ## Missingness model in infection attributable
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
@@ -963,11 +1005,11 @@ aipw_other_diarrhea_2 <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site,
+                                                                                covariate_list_no_site_followup,
                                                                                 severity_list,
                                                                                 pathogen_quantity_list)], type = "response")$pred
     prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site,
+                                                                                covariate_list_no_site_followup,
                                                                                 severity_list,
                                                                                 pathogen_quantity_list)], type = "response")$pred
   }
@@ -1065,6 +1107,23 @@ aipw_other_diarrhea_2 <- function(data,
   
   names(aipws_effect) <- paste0("effect_", abx_levels)
   colnames(eifs_effect) <- paste0("effect_", abx_levels)
+  
+  # Truncate any large propensity scores
+  if(!is.na(ps_trunc_level)){
+    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
+    
+    truncate_ps <- function(mat, ps_trunc_level){
+      mat[mat < ps_trunc_level] <- ps_trunc_level
+      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+      return(mat)
+    }
+    
+    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
+    prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
+    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
+    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
+    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+  }
   
   # Compute effects for all levels of abx
   
@@ -1178,6 +1237,7 @@ aipw_other_diarrhea_2 <- function(data,
 #' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
+#' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
 #' 
 #' @keywords internal
 #' 
@@ -1187,6 +1247,7 @@ aipw_case_control <- function(data,
                               abx_var_name,
                               case_var_name,
                               site_var_name,
+                              followup_var_names,
                               covariate_list,
                               severity_list,
                               pathogen_quantity_list = NULL,
@@ -1202,7 +1263,8 @@ aipw_case_control <- function(data,
                               first_id_var_name = NULL,
                               msm = FALSE,
                               msm_var_name = NULL,
-                              msm_formula = NULL){
+                              msm_formula = NULL,
+                              ps_trunc_level = 0.01){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -1351,6 +1413,15 @@ aipw_case_control <- function(data,
   # If site in covariate_list, remove
   if(!any(is.na(site_var_name))){
     covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  } else{
+    covariate_list_no_site <- covariate_list
+  }
+  
+  # If followup_days related variables, remove from missingness models
+  if(!any(is.na(followup_var_names))){
+    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+  } else{
+    covariate_list_no_site_followup <- covariate_list_no_site
   }
   
   prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
@@ -1441,8 +1512,8 @@ aipw_case_control <- function(data,
   
   ## Part 3: Propensity models for missingness
   
-  covariates_case_no_site <- case_data[, covariate_list_no_site, drop = FALSE]
-  covariates_control_no_site <- control_data[, covariate_list_no_site, drop = FALSE]
+  covariates_case_no_site <- case_data[, covariate_list_no_site_followup, drop = FALSE]
+  covariates_control_no_site <- control_data[, covariate_list_no_site_followup, drop = FALSE]
   
   ## Missingness model in cases
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_case,
@@ -1469,7 +1540,7 @@ aipw_case_control <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[case_data_idx,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                             covariate_list_no_site,
+                                                                                             covariate_list_no_site_followup,
                                                                                              pathogen_quantity_list,
                                                                                              severity_list)], type = "response")$pred
   }
@@ -1494,6 +1565,22 @@ aipw_case_control <- function(data,
   
   colnames(case_eifs) <- paste0("case_eif_", abx_levels)
   colnames(control_eifs) <- paste0("control_eif")
+  
+  # Truncate any large propensity scores
+  if(!is.na(ps_trunc_level)){
+    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
+    
+    truncate_ps <- function(mat, ps_trunc_level){
+      mat[mat < ps_trunc_level] <- ps_trunc_level
+      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+      return(mat)
+    }
+    
+    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
+    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
+    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
+    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+  }
   
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]

@@ -10,6 +10,7 @@ aipw_other_diarrhea(
   abx_var_name,
   infection_var_name,
   site_var_name,
+  followup_var_names,
   covariate_list,
   pathogen_quantity_list = NULL,
   pathogen_attributable_list = NULL,
@@ -24,7 +25,8 @@ aipw_other_diarrhea(
   first_id_var_name = NULL,
   msm = FALSE,
   msm_var_name = NULL,
-  msm_formula = NULL
+  msm_formula = NULL,
+  ps_trunc_level = 0.01
 )
 }
 \arguments{
@@ -37,6 +39,8 @@ aipw_other_diarrhea(
 \item{infection_var_name}{name of binary infection variable (for other diarrhea analyses; case_control = FALSE)}
 
 \item{site_var_name}{name of covariate for site (to exclude from propensity models)}
+
+\item{followup_var_names}{name of time to followup related variables (to exclude from missingness propensity models)}
 
 \item{covariate_list}{character vector containing names of baseline covariates}
 
@@ -67,6 +71,8 @@ aipw_other_diarrhea(
 \item{msm_var_name}{name of variable to use for msm}
 
 \item{msm_formula}{chatacter vector with formula to use for msm if msm TRUE}
+
+\item{ps_trunc_level}{numeric value to truncate propensity scores \verb{< ps_trunc_level} or \verb{> 1 - ps_trunc_level}. Default to 0.01}
 }
 \value{
 List containing \code{aipw_other_diarrhea} object, models (if return_models = TRUE). \code{aipw_other_diarrhea} object contains dataframe with results, covariance matrix, standard errors.

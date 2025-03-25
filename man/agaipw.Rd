@@ -11,6 +11,7 @@ agaipw(
   infection_var_name = NA,
   case_var_name = NA,
   site_var_name = NA,
+  followup_var_names = NA,
   covariate_list,
   severity_list = NULL,
   pathogen_quantity_list = NULL,
@@ -33,7 +34,8 @@ agaipw(
   first_id_var_name = NULL,
   msm = FALSE,
   msm_var_name = NULL,
-  msm_formula = NULL
+  msm_formula = NULL,
+  ps_trunc_level = 0.01
 )
 }
 \arguments{
@@ -94,6 +96,8 @@ agaipw(
 \item{msm_var_name}{name of variable to use for msm}
 
 \item{msm_formula}{chatacter vector with formula to use for msm if msm TRUE}
+
+\item{ps_trunc_level}{numeric value to truncate propensity scores \verb{< ps_trunc_level} or \verb{> 1 - ps_trunc_level}. Default to 0.01}
 }
 \value{
 List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.

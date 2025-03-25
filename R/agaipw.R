@@ -31,6 +31,7 @@
 #' @param msm boolean indicating use of MSM for effect heterogeneity, default FALSE
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
+#' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
 #' 
 #' @export
 #' 
@@ -41,6 +42,7 @@ agaipw <- function(data,
                     infection_var_name = NA,
                     case_var_name = NA,
                     site_var_name = NA,
+                    followup_var_names = NA,
                     covariate_list, 
                     severity_list = NULL,
                     pathogen_quantity_list = NULL,
@@ -63,7 +65,8 @@ agaipw <- function(data,
                     first_id_var_name = NULL,
                     msm = FALSE,
                     msm_var_name = NULL,
-                    msm_formula = NULL){
+                    msm_formula = NULL,
+                    ps_trunc_level = 0.01){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -78,6 +81,7 @@ agaipw <- function(data,
                                         abx_var_name = abx_var_name,
                                         infection_var_name = infection_var_name,
                                         site_var_name = site_var_name,
+                                        followup_var_names = followup_var_names,
                                         covariate_list = covariate_list,
                                         severity_list = severity_list,
                                         pathogen_quantity_list = pathogen_quantity_list,
@@ -94,7 +98,8 @@ agaipw <- function(data,
                                         first_id_var_name = first_id_var_name,
                                         msm = msm,
                                         msm_var_name = msm_var_name,
-                                        msm_formula = msm_formula)
+                                        msm_formula = msm_formula, 
+                                        ps_trunc_level = ps_trunc_level)
     } else {
       # Do not include second stage outcome regression
       aipw_est <- aipw_other_diarrhea(data = data,
@@ -102,6 +107,7 @@ agaipw <- function(data,
                                       abx_var_name = abx_var_name,
                                       infection_var_name = infection_var_name,
                                       site_var_name = site_var_name,
+                                      followup_var_names = followup_var_names,
                                       covariate_list = covariate_list,
                                       pathogen_quantity_list = pathogen_quantity_list,
                                       pathogen_attributable_list = pathogen_attributable_list,
@@ -116,7 +122,8 @@ agaipw <- function(data,
                                       first_id_var_name = first_id_var_name,
                                       msm = msm,
                                       msm_var_name = msm_var_name,
-                                      msm_formula = msm_formula)
+                                      msm_formula = msm_formula,
+                                      ps_trunc_level = ps_trunc_level)
     }
     
     parameters <- list(laz_var_name = laz_var_name,
@@ -141,6 +148,7 @@ agaipw <- function(data,
                                   abx_var_name = abx_var_name,
                                   case_var_name = case_var_name,
                                   site_var_name = site_var_name,
+                                  followup_var_names = followup_var_names,
                                   covariate_list = covariate_list,
                                   severity_list = severity_list,
                                   pathogen_quantity_list = pathogen_quantity_list,
@@ -156,7 +164,8 @@ agaipw <- function(data,
                                   first_id_var_name = first_id_var_name,
                                   msm = msm,
                                   msm_var_name = msm_var_name,
-                                  msm_formula = msm_formula)
+                                  msm_formula = msm_formula,
+                                  ps_trunc_level = ps_trunc_level)
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,
