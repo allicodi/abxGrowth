@@ -521,11 +521,15 @@ aipw_other_diarrhea <- function(data,
     marginal_effect_estimates <- colMeans(msm_vectors[inf_attr_idx, , drop = FALSE])
     
     results_object <- list(results_df = results_df,
+                           plug_ins_inf = plug_ins_inf,
+                           plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat,
                            marginal_effect_estimates = marginal_effect_estimates)
   } else{
     results_object <- list(results_df = results_df,
+                           plug_ins_inf = plug_ins_inf,
+                           plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat)
   }
@@ -1164,11 +1168,15 @@ aipw_other_diarrhea_2 <- function(data,
     marginal_effect_estimates <- colMeans(msm_vectors[inf_attr_idx, , drop = FALSE])
     
     results_object <- list(results_df = results_df,
+                           plug_ins_inf = plug_ins_inf,
+                           plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat,
                            marginal_effect_estimates = marginal_effect_estimates)
   } else{
     results_object <- list(results_df = results_df,
+                           plug_ins_inf = plug_ins_inf,
+                           plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat)
   }
@@ -1684,11 +1692,15 @@ aipw_case_control <- function(data,
     marginal_effect_estimates <- colMeans(msm_vectors[case_data_idx, , drop = FALSE])
     
     results_object <- list(results_df = results_df,
+                           plug_ins_case = plug_ins_case,
+                           plug_ins_control = plug_ins_control,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat,
                            marginal_effect_estimates = marginal_effect_estimates)
   } else{
     results_object <- list(results_df = results_df,
+                           plug_ins_case = plug_ins_case,
+                           plug_ins_control = plug_ins_control,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat)
   }
