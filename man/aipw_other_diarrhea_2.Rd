@@ -10,6 +10,7 @@ aipw_other_diarrhea_2(
   abx_var_name,
   infection_var_name,
   site_var_name,
+  followup_var_names,
   covariate_list,
   severity_list,
   pathogen_quantity_list = NA,

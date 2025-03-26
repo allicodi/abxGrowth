@@ -694,7 +694,8 @@ aipw_other_diarrhea_2 <- function(data,
                                                                 pathogen_q_inf_attr_complete),
                                                  family = outcome_type, 
                                                  SL.library = sl.library.outcome,
-                                                 cvControl = list(V = v_folds))
+                                                 cvControl = list(V = v_folds),
+                                                 control = list(saveCVFitLibrary = TRUE))
   
   ## Model 1b: Outcome model in cases with no attribution
   outcome_model_1b <- SuperLearner::SuperLearner(Y = Y_no_attr_complete, 
