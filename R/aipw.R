@@ -197,17 +197,17 @@ aipw_other_diarrhea <- function(data,
   # ------------------------------------------------------------
   
   # If site in covariate_list, remove
-  if(!any(is.na(site_var_name))){
-    covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  } else{
-    covariate_list_no_site <- covariate_list
-  }
+  # if(!any(is.na(site_var_name))){
+  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  # } else{
+  #   covariate_list_no_site <- covariate_list
+  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
-    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+    covariate_list_no_followup <- covariate_list[!(covariate_list %in% followup_var_names)]
   } else{
-    covariate_list_no_site_followup <- covariate_list_no_site
+    covariate_list_no_followup <- covariate_list
   }
   
   prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
@@ -247,7 +247,7 @@ aipw_other_diarrhea <- function(data,
         prop_sub_no_attr <- sub_no_attr
       }
       
-      prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list_no_site , drop = FALSE]
+      prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list , drop = FALSE]
       prop_pathogen_inf_attr <- prop_sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
       
       prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list_no_site, drop = FALSE]
@@ -257,7 +257,7 @@ aipw_other_diarrhea <- function(data,
       prop_model_1a <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
                                                   X = data.frame(prop_covariates_inf_attr,
                                                                  prop_pathogen_inf_attr),
-                                                  newX = data[,c(covariate_list_no_site ,
+                                                  newX = data[,c(covariate_list ,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -270,7 +270,7 @@ aipw_other_diarrhea <- function(data,
       prop_model_1b <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_no_attr[[abx_var_name]] == abx_level),
                                                   X = data.frame(prop_covariates_no_attr,
                                                                  prop_pathogen_no_attr),
-                                                  newX = data[,c(covariate_list_no_site ,
+                                                  newX = data[,c(covariate_list ,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -312,7 +312,7 @@ aipw_other_diarrhea <- function(data,
   
   # 2a_1 = Shigella Attributable ~ BL Cov
   prop_model_2a_1 <- SuperLearner::SuperLearner(Y = data[[infection_var_name]],
-                                                X = data[, covariate_list_no_site , drop = FALSE], 
+                                                X = data[, covariate_list , drop = FALSE], 
                                                 family = stats::binomial(),
                                                 SL.library = sl.library.infection, 
                                                 cvControl = list(V = v_folds))
@@ -330,8 +330,8 @@ aipw_other_diarrhea <- function(data,
   } 
   
   prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
-                                                X = sub_no_shig[,covariate_list_no_site , drop = FALSE],
-                                                newX = data[,covariate_list_no_site , drop = FALSE],
+                                                X = sub_no_shig[,covariate_list , drop = FALSE],
+                                                newX = data[,covariate_list , drop = FALSE],
                                                 family = stats::binomial(),
                                                 SL.library = sl.library.infection,
                                                 cvControl = list(V = v_folds))
@@ -342,8 +342,8 @@ aipw_other_diarrhea <- function(data,
   ## Part 3: Propensity models for missingness
   
   # Data without site
-  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site_followup , drop = FALSE]
-  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site_followup, drop = FALSE]
+  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_followup , drop = FALSE]
+  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_followup, drop = FALSE]
   
   ## Missingness model in infection attributable
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
@@ -369,9 +369,9 @@ aipw_other_diarrhea <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site_followup)], type = "response")$pred
+                                                                                covariate_list_no_followup)], type = "response")$pred
     prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site_followup)], type = "response")$pred
+                                                                                covariate_list_no_followup)], type = "response")$pred
   }
   
   # -------------------------------------------------
@@ -417,9 +417,7 @@ aipw_other_diarrhea <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[,i]
     
-    # TYPO??? this should be outcome_var_name
-    # I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
-    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
     P_Delta_0__Inf_all <- 1 - prop_vectors_3a[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
@@ -852,17 +850,17 @@ aipw_other_diarrhea_2 <- function(data,
   # ------------------------------------------------------------
   
   # If site in covariate_list, remove
-  if(!any(is.na(site_var_name))){
-    covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  } else{
-    covariate_list_no_site <- covariate_list
-  }
+  # if(!any(is.na(site_var_name))){
+  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  # } else{
+  #   covariate_list_no_site <- covariate_list
+  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
-    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+    covariate_list_no_followup <- covariate_list[!(covariate_list %in% followup_var_names)]
   } else{
-    covariate_list_no_site_followup <- covariate_list_no_site
+    covariate_list_no_followup <- covariate_list
   }
   
   # Create matrices to hold predictions from propensity models
@@ -906,11 +904,11 @@ aipw_other_diarrhea_2 <- function(data,
         prop_sub_no_attr <- sub_no_attr
       }
       
-      prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list_no_site , drop = FALSE]
+      prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list , drop = FALSE]
       prop_severity_inf_attr <- prop_sub_inf_attr[, severity_list, drop = FALSE]
       prop_pathogen_inf_attr <- prop_sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
       
-      prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list_no_site , drop = FALSE]
+      prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list , drop = FALSE]
       prop_severity_no_attr <- prop_sub_no_attr[, severity_list, drop = FALSE]
       prop_pathogen_no_attr <- prop_sub_no_attr[, pathogen_quantity_list, drop = FALSE]
       
@@ -919,7 +917,7 @@ aipw_other_diarrhea_2 <- function(data,
                                                   X = data.frame(prop_covariates_inf_attr,
                                                                  prop_severity_inf_attr,
                                                                  prop_pathogen_inf_attr),
-                                                  newX = data[,c(covariate_list_no_site ,
+                                                  newX = data[,c(covariate_list ,
                                                                  severity_list,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
@@ -934,7 +932,7 @@ aipw_other_diarrhea_2 <- function(data,
                                                   X = data.frame(prop_covariates_no_attr,
                                                                  prop_severity_no_attr,
                                                                  prop_pathogen_no_attr),
-                                                  newX = data[,c(covariate_list_no_site ,
+                                                  newX = data[,c(covariate_list ,
                                                                  severity_list,
                                                                  pathogen_quantity_list)], 
                                                   family = stats::binomial(), 
@@ -979,7 +977,7 @@ aipw_other_diarrhea_2 <- function(data,
   
   # 2a_1 = Shigella Attributable ~ BL Cov
   prop_model_2a_1 <- SuperLearner::SuperLearner(Y = data[[infection_var_name]],
-                                                X = data[, covariate_list_no_site , drop = FALSE], 
+                                                X = data[, covariate_list , drop = FALSE], 
                                                 family = stats::binomial(),
                                                 SL.library = sl.library.infection, 
                                                 cvControl = list(V = v_folds))
@@ -997,8 +995,8 @@ aipw_other_diarrhea_2 <- function(data,
   } 
   
   prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
-                                                X = sub_no_shig[,covariate_list_no_site , drop = FALSE],
-                                                newX = data[,covariate_list_no_site , drop = FALSE],
+                                                X = sub_no_shig[,covariate_list , drop = FALSE],
+                                                newX = data[,covariate_list , drop = FALSE],
                                                 family = stats::binomial(),
                                                 SL.library = sl.library.infection,
                                                 cvControl = list(V = v_folds))
@@ -1011,8 +1009,8 @@ aipw_other_diarrhea_2 <- function(data,
   ###############################################
   
   # Data without site
-  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_site_followup , drop = FALSE]
-  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_site_followup , drop = FALSE]
+  prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_followup , drop = FALSE]
+  prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_followup , drop = FALSE]
   
   ## Missingness model in infection attributable
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
@@ -1042,11 +1040,11 @@ aipw_other_diarrhea_2 <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site_followup,
+                                                                                covariate_list_no_followup,
                                                                                 severity_list,
                                                                                 pathogen_quantity_list)], type = "response")$pred
     prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_site_followup,
+                                                                                covariate_list_no_followup,
                                                                                 severity_list,
                                                                                 pathogen_quantity_list)], type = "response")$pred
   }
@@ -1452,17 +1450,17 @@ aipw_case_control <- function(data,
   # ------------------------------------------------------------
   
   # If site in covariate_list, remove
-  if(!any(is.na(site_var_name))){
-    covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  } else{
-    covariate_list_no_site <- covariate_list
-  }
+  # if(!any(is.na(site_var_name))){
+  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
+  # } else{
+  #   covariate_list_no_site <- covariate_list
+  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
-    covariate_list_no_site_followup <- covariate_list_no_site[!(covariate_list_no_site %in% followup_var_names)]
+    covariate_list_no_followup <- covariate_list[!(covariate_list %in% followup_var_names)]
   } else{
-    covariate_list_no_site_followup <- covariate_list_no_site
+    covariate_list_no_followup <- covariate_list
   }
   
   prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
@@ -1497,7 +1495,7 @@ aipw_case_control <- function(data,
         prop_sub_case <- case_data
       }
       
-      prop_covariates_case <- prop_sub_case[, covariate_list_no_site, drop = FALSE]
+      prop_covariates_case <- prop_sub_case[, covariate_list, drop = FALSE]
       prop_severity_case <- prop_sub_case[, severity_list, drop = FALSE]
       prop_pathogen_case <- prop_sub_case[, pathogen_quantity_list, drop = FALSE]
       
@@ -1510,7 +1508,7 @@ aipw_case_control <- function(data,
                                                   SL.library = sl.library.treatment,
                                                   cvControl = list(V = v_folds))
       
-      tmp_pred_a <- stats::predict(prop_model_1a, newdata = case_data[,c(covariate_list_no_site,
+      tmp_pred_a <- stats::predict(prop_model_1a, newdata = case_data[,c(covariate_list,
                                                                          severity_list,
                                                                          pathogen_quantity_list)], type = "response")$pred
       
@@ -1544,7 +1542,7 @@ aipw_case_control <- function(data,
   
   # 2a_1 = Shigella Attributable ~ BL Cov
   prop_model_2a <- SuperLearner::SuperLearner(Y = data[[case_var_name]],
-                                              X = data[, covariate_list_no_site, drop = FALSE],
+                                              X = data[, covariate_list, drop = FALSE],
                                               family = stats::binomial(),
                                               SL.library = sl.library.infection, 
                                               cvControl = list(V = v_folds))
@@ -1553,8 +1551,8 @@ aipw_case_control <- function(data,
   
   ## Part 3: Propensity models for missingness
   
-  covariates_case_no_site <- case_data[, covariate_list_no_site_followup, drop = FALSE]
-  covariates_control_no_site <- control_data[, covariate_list_no_site_followup, drop = FALSE]
+  covariates_case_no_site <- case_data[, covariate_list_no_followup, drop = FALSE]
+  covariates_control_no_site <- control_data[, covariate_list_no_followup, drop = FALSE]
   
   ## Missingness model in cases
   prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_case,
@@ -1581,7 +1579,7 @@ aipw_case_control <- function(data,
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[case_data_idx,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                             covariate_list_no_site_followup,
+                                                                                             covariate_list_no_followup,
                                                                                              pathogen_quantity_list,
                                                                                              severity_list)], type = "response")$pred
   }
