@@ -250,7 +250,7 @@ aipw_other_diarrhea <- function(data,
       prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list , drop = FALSE]
       prop_pathogen_inf_attr <- prop_sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
       
-      prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list_no_site, drop = FALSE]
+      prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list, drop = FALSE]
       prop_pathogen_no_attr <- prop_sub_no_attr[, pathogen_quantity_list, drop = FALSE]
       
       ## 1a. Propensity model for abx shigella attributable
