@@ -417,13 +417,29 @@ aipw_other_diarrhea <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[,i]
     
-    I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    # TYPO??? this should be outcome_var_name
+    # I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
     P_Delta_0__Inf_all <- 1 - prop_vectors_3a[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
     Qbar_Inf_1_Abx_a_Covariates <- outcome_vectors_1a[,i]
     
-    eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+    # Truncation by 5 / (sqrt(n) ln(n)) (https://academic.oup.com/aje/article/191/9/1640/6580570?login=true)
+    if(!is.null(first_id_var_name)){
+      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * length(unique(data[[first_id_var_name]])) # where length(unique(data[[first_id_var_name]])) = number of unique kids in the dataset
+    } else{
+      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * nrow(data)
+    }
+    
+    truncate_factor <- 5/(sqrt(pseudo_n) * log(pseudo_n))
+    full_propensity <- P_Abx_a__Inf_1_Covariates * P_Delta_0__Inf_all
+    full_propensity[full_propensity < truncate_factor] <- truncate_factor
+    
+    # eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+    #   (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
+    
+    eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
       (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
     
     # 2 - Bias correction for no etiology (some repeats from above for clarity while writing)
@@ -441,7 +457,10 @@ aipw_other_diarrhea <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Covariates <- prop_vectors_1b[,i]
     
-    I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    
+    # TYPO??
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
+    #I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
     P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
@@ -452,7 +471,20 @@ aipw_other_diarrhea <- function(data,
     I_Inf_1 <- data[[infection_var_name]]
     P_Inf_1 <- mean(prop_vectors_2a[,1])
     
-    eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+    # Truncation by 5 / (sqrt(n) ln(n)) (https://academic.oup.com/aje/article/191/9/1640/6580570?login=true)
+    if(!is.null(first_id_var_name)){
+      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * length(unique(data[[first_id_var_name]])) # where length(unique(data[[first_id_var_name]])) = number of unique kids in the dataset
+    } else{
+      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * nrow(data)
+    }
+    truncate_factor <- 5/(sqrt(pseudo_n) * log(pseudo_n))
+    full_propensity <- P_Abx_a__Covariates *  P_Delta_0__No_attr_all
+    full_propensity[full_propensity < truncate_factor] <- truncate_factor
+    
+    # eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+    #   (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i]) 
+    
+    eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) + 
       (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i]) 
     
     inf_eifs[,i] <- eif_vec_inf
@@ -1046,7 +1078,7 @@ aipw_other_diarrhea_2 <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[,i]
     
-    I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
     P_Delta_0__Inf_all <- 1 - prop_vectors_3a[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
@@ -1070,7 +1102,7 @@ aipw_other_diarrhea_2 <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Covariates <- prop_vectors_1b[,i]
     
-    I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
     P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
