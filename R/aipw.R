@@ -189,8 +189,8 @@ aipw_other_diarrhea <- function(data,
       cQ_inv_list[[i]] <- tryCatch(solve(cQ_sum/nrow(mod_mat)), error = function(){ MASS::ginv(cQ_sum/nrow(mod_mat)) })
 
       effect_hetero_msm <- stats::glm(msm_formula_full, 
-                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
-                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
+                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       
+                                      family = outcome_type)                                      
       
       msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = data, type = 'response')
       
@@ -538,7 +538,7 @@ aipw_other_diarrhea <- function(data,
     # STEPPED THROUGH TILL HERE. BROKE WITH: 
     # Error in diag(as.matrix(eif_matrix_msm) %*% gradient) %*% msm_mod_mat_list[[i]] : 
     #   non-conformable arguments
-    eif_effect_msm_unnormed <- diag(as.matrix(eif_matrix_msm) %*% gradient) %*% msm_mod_mat_list[[i]] + 
+    eif_effect_msm_unnormed <- diag(c(as.matrix(eif_matrix_msm) %*% gradient)) %*% msm_mod_mat_list[[i]] + 
       + diag((I_Inf_1 / P_Inf_1) * (outcome_msm[,i] - msm_vectors[,i])) %*% msm_mod_mat_list[[i]]
     eif_effect_msm_list[[i]] <- eif_effect_msm_unnormed %*% cQ_inv_list[[i]]
     
@@ -592,7 +592,7 @@ aipw_other_diarrhea <- function(data,
     eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
     eifs_effect[,i] <- eif_effect
 
-    aipw_msm <- list(
+    aipw_msm[[i]] <- list(
       coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
       cov = stats::cov(scaled_matrix_msm_list[[i]] / nrow(scaled_matrix_msm_list[[i]]))
     )
@@ -752,7 +752,7 @@ aipw_other_diarrhea_2 <- function(data,
   
   ## Subset 0b: subset to cases with no etiology
   if(!is.null(no_etiology_var_name)){
-    sub_no_attr <- data[which(data[[infection_var_name]] == 0 & data[[no_etiology_var_name]] == 1),]
+    sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1),]
   } else{
     I_no_attr <- ifelse(data[[infection_var_name]] == 0 & (rowSums(data[,pathogen_attributable_list], na.rm = TRUE) == 0),
                         1, 0)
