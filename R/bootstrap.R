@@ -45,10 +45,10 @@ one_boot <- function(data,
   if(case_control == FALSE){
     ### Create Bootstrap Dataset ###
     
-    # if dataset has 'child_id', there may be some children who are repeated in dataset- sample based on this
+    # if dataset has 'first_id', there may be some children who are repeated in dataset- sample based on this
     # it's okay if boot_data slightly different size
-    if("child_id" %in% colnames(data)){
-      boot_child_id <- sample(unique(data$child_id), replace = TRUE)
+    if("first_id" %in% colnames(data)){
+      boot_child_id <- sample(unique(data$first_id), replace = TRUE)
       boot_child_rows_list <- sapply(boot_child_id, function(id){
         which(data$child_id == id)
       })
