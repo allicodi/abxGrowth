@@ -471,10 +471,7 @@ aipw_other_diarrhea <- function(data,
     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
     P_Abx_a__Covariates <- prop_vectors_1b[,i]
     
-    
-    # TYPO??
-    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
-    #I_Delta_0 <- as.numeric(!is.na(data[[infection_var_name]])) # Indicator NOT missing
+    I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
     P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[,i]
     
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
@@ -494,9 +491,6 @@ aipw_other_diarrhea <- function(data,
     truncate_factor <- 5/(sqrt(pseudo_n) * log(pseudo_n))
     full_propensity <- P_Abx_a__Covariates *  P_Delta_0__No_attr_all
     full_propensity[full_propensity < truncate_factor] <- truncate_factor
-    
-    # eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
-    #   (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i]) 
     
     eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) + 
       (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i]) 
@@ -535,9 +529,6 @@ aipw_other_diarrhea <- function(data,
     
     gradient <- matrix(gradient, ncol = 1)
     
-    # STEPPED THROUGH TILL HERE. BROKE WITH: 
-    # Error in diag(as.matrix(eif_matrix_msm) %*% gradient) %*% msm_mod_mat_list[[i]] : 
-    #   non-conformable arguments
     eif_effect_msm_unnormed <- diag(c(as.matrix(eif_matrix_msm) %*% gradient)) %*% msm_mod_mat_list[[i]] + 
       + diag((I_Inf_1 / P_Inf_1) * (outcome_msm[,i] - msm_vectors[,i])) %*% msm_mod_mat_list[[i]]
     eif_effect_msm_list[[i]] <- eif_effect_msm_unnormed %*% cQ_inv_list[[i]]
@@ -880,6 +871,8 @@ aipw_other_diarrhea_2 <- function(data,
     
     if(return_models){
       msm_model_list <- vector("list", length = length(abx_levels))
+      msm_mod_mat_list <- vector("list", length = length(abx_levels))
+      cQ_inv_list <- vector("list", length = length(abx_levels))
     }
     
     for(i in 1:length(abx_levels)){
@@ -895,9 +888,17 @@ aipw_other_diarrhea_2 <- function(data,
         c(abx_level_name, msm_var_name, infection_var_name) 
       )
       
+      # compute normalizing matrix needed later for 
+      mod_mat <- model.matrix(msm_formula_full, data = msm_data[msm_data[[infection_var_name]] == 1,])
+      msm_mod_mat_list[[i]] <- model.matrix(msm_formula_full, data = msm_data)
+      
+      cQ <- lapply(split(mod_mat, row(mod_mat)), tcrossprod)
+      cQ_sum <- Reduce("+", cQ)
+      cQ_inv_list[[i]] <- tryCatch(solve(cQ_sum/nrow(mod_mat)), error = function(){ MASS::ginv(cQ_sum/nrow(mod_mat)) })
+      
       effect_hetero_msm <- stats::glm(msm_formula_full, 
-                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
-                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
+                                      data = msm_data[msm_data[[infection_var_name]] == 1,],       
+                                      family = outcome_type)                                       
       
       msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
       
@@ -912,13 +913,6 @@ aipw_other_diarrhea_2 <- function(data,
   # ------------------------------------------------------------
   # STEP 2: Fit & predict from propensity models
   # ------------------------------------------------------------
-  
-  # If site in covariate_list, remove
-  # if(!any(is.na(site_var_name))){
-  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  # } else{
-  #   covariate_list_no_site <- covariate_list
-  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
@@ -1126,9 +1120,30 @@ aipw_other_diarrhea_2 <- function(data,
   ## Bias corrections
   inf_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   no_attr_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+  inf_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+  no_attr_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   
   colnames(inf_eifs) <- paste0("inf_eif_", abx_levels)
   colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
+  colnames(inf_eifs_msm) <- paste0("inf_eif_", abx_levels)
+  colnames(no_attr_eifs_msm) <- paste0("no_attr_eif_", abx_levels)
+  
+  # Truncate any large propensity scores
+  if(!is.na(ps_trunc_level)){
+    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
+    
+    truncate_ps <- function(mat, ps_trunc_level){
+      mat[mat < ps_trunc_level] <- ps_trunc_level
+      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+      return(mat)
+    }
+    
+    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
+    prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
+    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
+    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
+    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+  }
   
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]
@@ -1146,8 +1161,25 @@ aipw_other_diarrhea_2 <- function(data,
     obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
     Qbar_Inf_1_Abx_a_Covariates <- outcome_vectors_1a[,i]
     
-    eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+    if(!is.null(first_id_var_name)){
+      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * length(unique(data[[first_id_var_name]])) # where length(unique(data[[first_id_var_name]])) = number of unique kids in the dataset
+    } else{
+      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * nrow(data)
+    }
+    
+    # Truncation by 5 / (sqrt(n) ln(n)) (https://academic.oup.com/aje/article/191/9/1640/6580570?login=true)
+    truncate_factor <- 5/(sqrt(pseudo_n) * log(pseudo_n))
+    full_propensity <- P_Abx_a__Inf_1_Covariates * P_Delta_0__Inf_all
+    full_propensity[full_propensity < truncate_factor] <- truncate_factor
+    
+    eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
       (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
+    
+    # original
+    # eif_vec_inf <- (I_Inf_1 / P_Inf_1) * (I_Abx_a / P_Abx_a__Inf_1_Covariates) * (I_Delta_0 / P_Delta_0__Inf_all) * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates) +
+    #   (I_Inf_1 / P_Inf_1) * (Qbar_Inf_1_Abx_a_Covariates - plug_ins_inf[i])
+    
+    eif_vec_inf_msm <- (I_Inf_1 / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_Inf_1_Abx_a_Covariates)
     
     # 2 - Bias correction for no etiology (some repeats from above for clarity while writing)
     if(is.na(no_etiology_var_name)){
@@ -1175,12 +1207,33 @@ aipw_other_diarrhea_2 <- function(data,
     I_Inf_1 <- data[[infection_var_name]]
     P_Inf_1 <- mean(prop_vectors_2a[,1])
     
-    eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+    # TODO CHECK THIS IS STILL OK FOR VERSION WITH 2ND STAGE REGRESSION
+    # Truncation by 5 / (sqrt(n) ln(n)) (https://academic.oup.com/aje/article/191/9/1640/6580570?login=true)
+    if(!is.null(first_id_var_name)){
+      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * length(unique(data[[first_id_var_name]])) # where length(unique(data[[first_id_var_name]])) = number of unique kids in the dataset
+    } else{
+      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * nrow(data)
+    }
+    truncate_factor <- 5/(sqrt(pseudo_n) * log(pseudo_n))
+    full_propensity <- P_Abx_a__Covariates *  P_Delta_0__No_attr_all
+    full_propensity[full_propensity < truncate_factor] <- truncate_factor
+    
+    # original
+    # eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a / P_Abx_a__Covariates) * (I_Delta_0 / P_Delta_0__No_attr_all) * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+    #   (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - Qbar_No_attr_Covariates) + 
+    #   (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Covariates - plug_ins_no_attr[i]) 
+    
+    eif_vec_no_attr <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
       (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (Qbar_No_attr_Abx_a_Covariates - Qbar_No_attr_Covariates) + 
       (I_Inf_1 / P_Inf_1) * (Qbar_No_attr_Covariates - plug_ins_no_attr[i]) 
     
+    # TODO CHECK IF THIS IS CORRECT MSM, DOES IT NEED SECOND LINE??
+    eif_vec_no_attr_msm <- (I_No_attr_1 / P_No_attr__Covaritates) * (P_Inf_1__Covariates / P_Inf_1) * (I_Abx_a * I_Delta_0) / full_propensity * (obs_outcome - Qbar_No_attr_Abx_a_Covariates)
+    
     inf_eifs[,i] <- eif_vec_inf
     no_attr_eifs[,i] <- eif_vec_no_attr
+    inf_eifs_msm[,i] <- eif_vec_inf_msm
+    no_attr_eifs_msm[,i] <- eif_vec_no_attr_msm
     
   }
   
@@ -1191,38 +1244,56 @@ aipw_other_diarrhea_2 <- function(data,
   eif_matrix <- cbind(inf_eifs, no_attr_eifs)
   cov_matrix <- stats::cov(eif_matrix)
   
+  eif_matrix_msm <- cbind(inf_eifs_msm, no_attr_eifs_msm)
+  eif_effect_msm_list <- vector(mode = "list", length = length(abx_levels))
+  
+  # Finish calculating MSM efficient influence function
+  for(i in 1:length(abx_levels)){
+    
+    # Use EIFs to get variance for effect
+    idx_1 <- i
+    idx_2 <- length(abx_levels) + i
+    
+    gradient <- rep(0, length(abx_levels)*2)
+    gradient[idx_1] <- 1
+    gradient[idx_2] <- -1
+    
+    gradient <- matrix(gradient, ncol = 1)
+    
+    eif_effect_msm_unnormed <- diag(c(as.matrix(eif_matrix_msm) %*% gradient)) %*% msm_mod_mat_list[[i]] + 
+      + diag((I_Inf_1 / P_Inf_1) * (outcome_msm[,i] - msm_vectors[,i])) %*% msm_mod_mat_list[[i]]
+    eif_effect_msm_list[[i]] <- eif_effect_msm_unnormed %*% cQ_inv_list[[i]]
+    
+  }
+  
   # Get id for each participant and recreate EIFs based on this if present
   if(!is.null(first_id_var_name)){
     first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
     first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
     
     scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
+    
+    # TODO: this needs to be moved down to be after we finalize the MSM EIF
+    scaled_matrix_msm_list <- lapply(eif_effect_msm_list, function(eif_effect_msm){
+      first_id_eif_matrix_msm <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_effect_msm)
+      first_id_eif_matrix_msm <- aggregate(. ~ first_id, data = first_id_eif_matrix_msm, FUN = sum)
+      
+      return(first_id_eif_matrix_msm[,-c(1)] * (nrow(first_id_eif_matrix_msm) / nrow(eif_effect_msm)))
+    })
+    
   } else{
     scaled_matrix <- eif_matrix
+    scaled_matrix_msm_list <- eif_effect_msm_list
   }
   
   aipws_effect <- vector("numeric", length = length(abx_levels))
+  aipw_msm <- vector("list", length = length(abx_levels))
   eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   
   names(aipws_effect) <- paste0("effect_", abx_levels)
-  colnames(eifs_effect) <- paste0("effect_", abx_levels)
+  names(aipw_msm) <- paste0("msm_", abx_levels)
   
-  # Truncate any large propensity scores
-  if(!is.na(ps_trunc_level)){
-    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
-    
-    truncate_ps <- function(mat, ps_trunc_level){
-      mat[mat < ps_trunc_level] <- ps_trunc_level
-      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
-      return(mat)
-    }
-    
-    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
-    prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
-    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
-    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
-    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
-  }
+  colnames(eifs_effect) <- paste0("effect_", abx_levels)
   
   # Compute effects for all levels of abx
   
@@ -1244,6 +1315,11 @@ aipw_other_diarrhea_2 <- function(data,
     
     eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
     eifs_effect[,i] <- eif_effect
+    
+    aipw_msm[[i]] <- list(
+      coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
+      cov = stats::cov(scaled_matrix_msm_list[[i]] / nrow(scaled_matrix_msm_list[[i]]))
+    )
     
   }
   
@@ -1267,6 +1343,7 @@ aipw_other_diarrhea_2 <- function(data,
                            plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat,
+                           aipw_msm = aipw_msm,
                            marginal_effect_estimates = marginal_effect_estimates)
   } else{
     results_object <- list(results_df = results_df,
@@ -1496,8 +1573,8 @@ aipw_case_control <- function(data,
       )
       
       effect_hetero_msm <- stats::glm(msm_formula_full, 
-                                      data = msm_data[msm_data[[case_var_name]] == 1,],       # QUESTION subset to shigella people here? then predict on everyone?
-                                      family = outcome_type)                                       # QUESTION in general does this only work for continuous? because difference in outcome vectors?
+                                      data = msm_data[msm_data[[case_var_name]] == 1,],       
+                                      family = outcome_type)                            
       
       msm_vectors[,i] <- stats::predict(effect_hetero_msm, newdata = msm_data, type = 'response')
       
@@ -1512,13 +1589,6 @@ aipw_case_control <- function(data,
   # ------------------------------------------------------------
   # STEP 2: Fit & predict from propensity models
   # ------------------------------------------------------------
-  
-  # If site in covariate_list, remove
-  # if(!any(is.na(site_var_name))){
-  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  # } else{
-  #   covariate_list_no_site <- covariate_list
-  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
