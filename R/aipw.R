@@ -1559,6 +1559,8 @@ aipw_case_control <- function(data,
     
     if(return_models){
       msm_model_list <- vector("list", length = length(abx_levels))
+      msm_mod_mat_list <- vector("list", length = length(abx_levels))
+      cQ_inv_list <- vector("list", length = length(abx_levels))
     }
     
     for(i in 1:length(abx_levels)){
@@ -1573,6 +1575,14 @@ aipw_case_control <- function(data,
         data.frame(outcome_msm[, i], data[[msm_var_name]], data[[case_var_name]]), 
         c(abx_level_name, msm_var_name, case_var_name) 
       )
+      
+      # compute normalizing matrix needed later for 
+      mod_mat <- model.matrix(msm_formula_full, data = msm_data[msm_data[[infection_var_name]] == 1,])
+      msm_mod_mat_list[[i]] <- model.matrix(msm_formula_full, data = msm_data)
+      
+      cQ <- lapply(split(mod_mat, row(mod_mat)), tcrossprod)
+      cQ_sum <- Reduce("+", cQ)
+      cQ_inv_list[[i]] <- tryCatch(solve(cQ_sum/nrow(mod_mat)), error = function(){ MASS::ginv(cQ_sum/nrow(mod_mat)) })
       
       effect_hetero_msm <- stats::glm(msm_formula_full, 
                                       data = msm_data[msm_data[[case_var_name]] == 1,],       
@@ -1740,6 +1750,8 @@ aipw_case_control <- function(data,
   
   colnames(case_eifs) <- paste0("case_eif_", abx_levels)
   colnames(control_eifs) <- paste0("control_eif")
+  colnames(case_eifs_msm) <- paste0("case_eif_", abx_levels)
+  colnames(control_eifs_msm) <- paste0("control_eif_", abx_levels)
   
   # Truncate any large propensity scores
   if(!is.na(ps_trunc_level)){
@@ -1780,10 +1792,14 @@ aipw_case_control <- function(data,
     eif_case_vec <- (I_Case / P_Case) * (I_Abx_a / P_Abx_a__Case_Covariates) * (I_Delta_0 / P_Delta_0__Case_all) * (obs_outcome - Qbar_Case_Abx_a_Covariates) +
       (I_Case / P_Case) * (Qbar_Case_Abx_a_Covariates - plug_ins_case[i])
     
+    eif_case_vec_msm <- (I_Case / P_Case) * (I_Abx_a / P_Abx_a__Case_Covariates) * (I_Delta_0 / P_Delta_0__Case_all) * (obs_outcome - Qbar_Case_Abx_a_Covariates)
+
     # correct for / 0 with P_Abx_a__Case_Covariates, should be 0'd out
     eif_case_vec <- ifelse(is.nan(eif_case_vec), 0, eif_case_vec)
-    
+    eif_case_vec_msm <- ifelse(is.nan(eif_case_vec_msm), 0, eif_case_vec_msm)
+
     case_eifs[,i] <- eif_case_vec
+    case_eifs_msm[,i] <- eif_case_vec_msm
     
   }
   
@@ -1802,6 +1818,8 @@ aipw_case_control <- function(data,
   eif_control_vec <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates) +
     (I_Case / P_Case) * (Qbar_Control_Covariates - plug_ins_control)
   
+  control_eif_msm <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates)
+  
   control_eif <- eif_control_vec
   
   # Get AIPWs
@@ -1809,22 +1827,50 @@ aipw_case_control <- function(data,
   aipw_control <- plug_ins_control + colMeans(control_eif)  
   
   eif_matrix <- cbind(case_eifs, control_eif)
-  
-  # Compute effects for all levels of abx
-  
+  eif_matrix_msm <- cbind(case_eifs_msm, control_eif_msm)
+
+  # Finish calculating MSM efficient influence function
+  eif_effect_msm_list <- vector(mode = "list", length = length(abx_levels))
+
+  for(i in 1:length(abx_levels)){
+
+    idx_1 <- i
+    idx_2 <- length(abx_levels) + 1
+    
+    gradient <- rep(0, length(abx_levels) + 1)
+    
+    gradient[idx_1] <- 1
+    gradient[idx_2] <- -1
+    
+    gradient <- matrix(gradient, ncol = 1)
+    eif_effect_msm_unnormed <- diag(c(as.matrix(eif_matrix_msm) %*% gradient)) %*% msm_mod_mat_list[[i]] + 
+      + diag((I_Case / P_Case) * (outcome_msm[,i] - msm_vectors[,i])) %*% msm_mod_mat_list[[i]]
+    eif_effect_msm_list[[i]] <- eif_effect_msm_unnormed %*% cQ_inv_list[[i]]
+  }
+
   # Get id for each participant and recreate EIFs based on this if present
   if(!is.null(first_id_var_name)){
     first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
     first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
     scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
+    
+    scaled_matrix_msm_list <- lapply(eif_effect_msm_list, function(eif_effect_msm){
+      first_id_eif_matrix_msm <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_effect_msm)
+      first_id_eif_matrix_msm <- aggregate(. ~ first_id, data = first_id_eif_matrix_msm, FUN = sum)
+      
+      return(first_id_eif_matrix_msm[,-c(1)] * (nrow(first_id_eif_matrix_msm) / nrow(eif_effect_msm)))
+    })
   }else{
     scaled_matrix <- eif_matrix
+    scaled_matrix_msm_list <- eif_effect_msm_list
   }
   
   aipws_effect <- vector("numeric", length = length(abx_levels))
+  aipw_msm <- vector("list", length = length(abx_levels))
   eifs_effect <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   
   names(aipws_effect) <- paste0("effect_", abx_levels)
+  names(aipw_msm) <- paste0("msm_", abx_levels)
   colnames(eifs_effect) <- paste0("effect_", abx_levels)
   
   for(i in 1:length(abx_levels)){
@@ -1842,6 +1888,11 @@ aipw_case_control <- function(data,
     gradient <- matrix(gradient, ncol = 1)
     eif_effect <- as.numeric(as.matrix(scaled_matrix) %*% gradient)
     eifs_effect[,i] <- eif_effect
+
+    aipw_msm[[i]] <- list(
+      coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
+      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]])
+    )
     
   }
   
@@ -1863,6 +1914,7 @@ aipw_case_control <- function(data,
                            plug_ins_control = plug_ins_control,
                            eif_matrix = eif_matrix_scaled,
                            se = eif_hat,
+                           aipw_msm = aipw_msm,
                            marginal_effect_estimates = marginal_effect_estimates)
   } else{
     results_object <- list(results_df = results_df,
