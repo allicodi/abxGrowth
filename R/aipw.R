@@ -585,7 +585,7 @@ aipw_other_diarrhea <- function(data,
 
     aipw_msm[[i]] <- list(
       coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
-      cov = stats::cov(scaled_matrix_msm_list[[i]] / nrow(scaled_matrix_msm_list[[i]]))
+      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]])
     )
     
   }
