@@ -1577,7 +1577,7 @@ aipw_case_control <- function(data,
       )
       
       # compute normalizing matrix needed later for 
-      mod_mat <- model.matrix(msm_formula_full, data = msm_data[msm_data[[infection_var_name]] == 1,])
+      mod_mat <- model.matrix(msm_formula_full, data = msm_data[msm_data[[case_var_name]] == 1,])
       msm_mod_mat_list[[i]] <- model.matrix(msm_formula_full, data = msm_data)
       
       cQ <- lapply(split(mod_mat, row(mod_mat)), tcrossprod)
@@ -1721,7 +1721,10 @@ aipw_case_control <- function(data,
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]
     
-    pred_data <- case_data_no_site
+    # case data no site does not exist? 
+    #pred_data <- case_data_no_site
+    
+    pred_data <- case_data
     pred_data[[abx_var_name]] <- abx_level
     
     prop_vectors_3a[case_data_idx,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
@@ -1747,6 +1750,8 @@ aipw_case_control <- function(data,
   ## EIF for bias corrections
   case_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   control_eifs <- data.frame(matrix(ncol = 1, nrow = nrow(data)))
+  case_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+  control_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   
   colnames(case_eifs) <- paste0("case_eif_", abx_levels)
   colnames(control_eifs) <- paste0("control_eif")
