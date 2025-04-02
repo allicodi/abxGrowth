@@ -507,7 +507,6 @@ aipw_other_diarrhea <- function(data,
   aipw_inf <- plug_ins_inf + colMeans(inf_eifs)
   aipw_no_attr <- plug_ins_no_attr + colMeans(no_attr_eifs)
   
-  # TODO: is this needed here?
   eif_matrix <- cbind(inf_eifs, no_attr_eifs)
 
   eif_matrix_msm <- cbind(inf_eifs_msm, no_attr_eifs_msm)
@@ -539,6 +538,9 @@ aipw_other_diarrhea <- function(data,
   if(!is.null(first_id_var_name)){
     first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
     first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
+    
+    # restore column names 
+    colnames(first_id_eif_matrix)[-c(1)] <- colnames(eif_matrix)
     
     scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
 
@@ -1272,6 +1274,9 @@ aipw_other_diarrhea_2 <- function(data,
   if(!is.null(first_id_var_name)){
     first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
     first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
+    
+    # restore column names 
+    colnames(first_id_eif_matrix)[-c(1)] <- colnames(eif_matrix)
     
     scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
     
