@@ -1734,8 +1734,8 @@ aipw_case_control <- function(data,
     
     prop_vectors_3a[case_data_idx,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
                                                                                              covariate_list_no_followup,
-                                                                                             pathogen_quantity_list,
-                                                                                             severity_list)], type = "response")$pred
+                                                                                             severity_list,
+                                                                                             pathogen_quantity_list)], type = "response")$pred
   }
   
   # Fill in NAs with 0
