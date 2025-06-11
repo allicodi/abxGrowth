@@ -835,13 +835,13 @@ aipw_other_diarrhea_2 <- function(data,
     data$set_abx_outcome <-  outcome_vectors_1b[, i]
     
     # Take new subset because added set_abx_outcome column
-    sub_no_attr_2b <- data[which(data[[infection_var_name]] == 0), ]
+    # sub_no_attr_2b <- data[which(data[[infection_var_name]] == 0), ]
     
     if (!is.na(no_etiology_var_name)) {
-      sub_no_attr_2b <- sub_no_attr_2b[which(sub_no_attr_2b[[no_etiology_var_name]] == 1), ]
+      sub_no_attr_2b <- data[which(data[[no_etiology_var_name]] == 1), ]
     } else {
       # otherwise find which rows have no attr pathogens in pathogen_attributable_list
-      sub_no_attr_2b <- sub_no_attr_2b[which(rowSums(sub_no_attr_2b[, pathogen_attributable_list]) == 0), ]
+      sub_no_attr_2b <- data[which(rowSums(data[, pathogen_attributable_list]) == 0), ]
     }
     
     if(is.null(sl.library.outcome.2)){
@@ -1278,9 +1278,11 @@ aipw_other_diarrhea_2 <- function(data,
     # restore column names 
     colnames(first_id_eif_matrix)[-c(1)] <- colnames(eif_matrix)
     
+    # Get first ids to return at end for piecing things back together afterwards
+    eif_first_ids <- first_id_eif_matrix[,1]
+    
     scaled_matrix <- first_id_eif_matrix[,-c(1)] * (nrow(first_id_eif_matrix) / nrow(eif_matrix))
     
-    # TODO: this needs to be moved down to be after we finalize the MSM EIF
     scaled_matrix_msm_list <- lapply(eif_effect_msm_list, function(eif_effect_msm){
       first_id_eif_matrix_msm <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_effect_msm)
       first_id_eif_matrix_msm <- aggregate(. ~ first_id, data = first_id_eif_matrix_msm, FUN = sum)
@@ -1289,6 +1291,7 @@ aipw_other_diarrhea_2 <- function(data,
     })
     
   } else{
+    eif_first_ids <- NULL
     scaled_matrix <- eif_matrix
     scaled_matrix_msm_list <- eif_effect_msm_list
   }
@@ -1349,6 +1352,7 @@ aipw_other_diarrhea_2 <- function(data,
                            plug_ins_inf = plug_ins_inf,
                            plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
+                           eif_first_ids = eif_first_ids,
                            se = eif_hat,
                            aipw_msm = aipw_msm,
                            marginal_effect_estimates = marginal_effect_estimates)
@@ -1357,6 +1361,7 @@ aipw_other_diarrhea_2 <- function(data,
                            plug_ins_inf = plug_ins_inf,
                            plug_ins_no_attr = plug_ins_no_attr,
                            eif_matrix = eif_matrix_scaled,
+                           eif_first_ids = eif_first_ids,
                            se = eif_hat)
   }
   
@@ -1397,6 +1402,7 @@ aipw_other_diarrhea_2 <- function(data,
   
   return(list(results_df = results_df,
               eif_matrix = eif_matrix_scaled,
+              eif_first_ids = eif_first_ids,
               se = eif_hat))
 }
 
