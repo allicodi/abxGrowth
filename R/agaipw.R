@@ -33,6 +33,8 @@
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
 #' @param parsimonious_propensity default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)
+#' @param all_other_diarrhea flag for comparison to all other diarrhea (not no etiology diarrhea), default falses
+#' @param adjust_pathogen_case_control flag to adjust for pathogen quantities in case control analysis, default false
 #' 
 #' @export
 #' 
@@ -69,7 +71,8 @@ agaipw <- function(data,
                     msm_formula = NULL,
                     ps_trunc_level = 0.01, 
                     parsimonious_propensity = TRUE,
-                    all_other_diarrhea = FALSE){
+                    all_other_diarrhea = FALSE,
+                    adjust_pathogen_case_control = FALSE){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -149,29 +152,56 @@ agaipw <- function(data,
   } else{
     
     ## Case-control analysis
-    aipw_est <- aipw_case_control(data = data,
-                                  laz_var_name = laz_var_name,
-                                  abx_var_name = abx_var_name,
-                                  case_var_name = case_var_name,
-                                  site_var_name = site_var_name,
-                                  followup_var_names = followup_var_names,
-                                  covariate_list = covariate_list,
-                                  severity_list = severity_list,
-                                  pathogen_quantity_list = pathogen_quantity_list,
-                                  outcome_type = outcome_type,
-                                  sl.library.outcome.case = sl.library.outcome.case,
-                                  sl.library.outcome.control = sl.library.outcome.control,
-                                  sl.library.treatment = sl.library.treatment,
-                                  sl.library.infection = sl.library.infection,
-                                  sl.library.missingness.case = sl.library.missingness.case,
-                                  sl.library.missingness.control = sl.library.missingness.control,
-                                  v_folds = v_folds,
-                                  return_models = return_models,
-                                  first_id_var_name = first_id_var_name,
-                                  msm = msm,
-                                  msm_var_name = msm_var_name,
-                                  msm_formula = msm_formula,
-                                  ps_trunc_level = ps_trunc_level)
+    if(!adjust_pathogen_case_control){
+      aipw_est <- aipw_case_control(data = data,
+                                    laz_var_name = laz_var_name,
+                                    abx_var_name = abx_var_name,
+                                    case_var_name = case_var_name,
+                                    site_var_name = site_var_name,
+                                    followup_var_names = followup_var_names,
+                                    covariate_list = covariate_list,
+                                    severity_list = severity_list,
+                                    pathogen_quantity_list = pathogen_quantity_list,
+                                    outcome_type = outcome_type,
+                                    sl.library.outcome.case = sl.library.outcome.case,
+                                    sl.library.outcome.control = sl.library.outcome.control,
+                                    sl.library.treatment = sl.library.treatment,
+                                    sl.library.infection = sl.library.infection,
+                                    sl.library.missingness.case = sl.library.missingness.case,
+                                    sl.library.missingness.control = sl.library.missingness.control,
+                                    v_folds = v_folds,
+                                    return_models = return_models,
+                                    first_id_var_name = first_id_var_name,
+                                    msm = msm,
+                                    msm_var_name = msm_var_name,
+                                    msm_formula = msm_formula,
+                                    ps_trunc_level = ps_trunc_level)
+    } else{
+      # second stage outcome regression to adjust for pathogen quantities in the controls
+      aipw_est <- aipw_case_control_2(data = data,
+                                    laz_var_name = laz_var_name,
+                                    abx_var_name = abx_var_name,
+                                    case_var_name = case_var_name,
+                                    site_var_name = site_var_name,
+                                    followup_var_names = followup_var_names,
+                                    covariate_list = covariate_list,
+                                    severity_list = severity_list,
+                                    pathogen_quantity_list = pathogen_quantity_list,
+                                    outcome_type = outcome_type,
+                                    sl.library.outcome.case = sl.library.outcome.case,
+                                    sl.library.outcome.control = sl.library.outcome.control,
+                                    sl.library.treatment = sl.library.treatment,
+                                    sl.library.infection = sl.library.infection,
+                                    sl.library.missingness.case = sl.library.missingness.case,
+                                    sl.library.missingness.control = sl.library.missingness.control,
+                                    v_folds = v_folds,
+                                    return_models = return_models,
+                                    first_id_var_name = first_id_var_name,
+                                    msm = msm,
+                                    msm_var_name = msm_var_name,
+                                    msm_formula = msm_formula,
+                                    ps_trunc_level = ps_trunc_level)
+    }
     
     parameters <- list(laz_var_name = laz_var_name,
                        abx_var_name = abx_var_name,

@@ -36,7 +36,9 @@ agaipw(
   msm_var_name = NULL,
   msm_formula = NULL,
   ps_trunc_level = 0.01,
-  parsimonious_propensity = TRUE
+  parsimonious_propensity = TRUE,
+  all_other_diarrhea = FALSE,
+  adjust_pathogen_case_control = FALSE
 )
 }
 \arguments{
@@ -101,6 +103,10 @@ agaipw(
 \item{ps_trunc_level}{numeric value to truncate propensity scores \verb{< ps_trunc_level} or \verb{> 1 - ps_trunc_level}. Default to 0.01}
 
 \item{parsimonious_propensity}{default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)}
+
+\item{all_other_diarrhea}{flag for comparison to all other diarrhea (not no etiology diarrhea), default falses}
+
+\item{adjust_pathogen_case_control}{flag to adjust for pathogen quantities in case control analysis, default false}
 }
 \value{
 List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.

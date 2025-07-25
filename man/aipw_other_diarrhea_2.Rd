@@ -29,7 +29,8 @@ aipw_other_diarrhea_2(
   msm_var_name = NULL,
   msm_formula = NULL,
   ps_trunc_level = 0.01,
-  parsimonious_propensity = TRUE
+  parsimonious_propensity = TRUE,
+  all_other_diarrhea = FALSE
 )
 }
 \arguments{
@@ -80,6 +81,8 @@ aipw_other_diarrhea_2(
 \item{ps_trunc_level}{numeric value to truncate propensity scores \verb{< ps_trunc_level} or \verb{> 1 - ps_trunc_level}. Default to 0.01}
 
 \item{parsimonious_propensity}{default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)}
+
+\item{all_other_diarrhea}{flag for sensitivity analysis comparison to all_other_diarrhea, default FALSE}
 
 \item{sl.library.outcome.case}{list containing SuperLearner libraries to use for case outcome regression}
 
