@@ -975,6 +975,9 @@ plot_cis_subplots <- function(results,
   
   plot_data <- do.call(rbind, plot_data)
   
+  # Change _ to space for subgroup labels
+  plot_data$subgroup <- gsub("_", " ", plot_data$subgroup)
+  
   # Make sure subgroup is treated as factor
   plot_data$subgroup <- factor(plot_data$subgroup)
   
@@ -1089,4 +1092,122 @@ impute_covariates <- function(data,
   return(data)
   
 }
+
+#' Helper function to average results across multiple seeds
+#'
+#' @param results_list list of results using same antibiotics levels and infection defintions, different seeds
+#'
+#' @return summary_df dataframe summarizing results across length(results_list) seeds
+#' @export
+#'
+average_agaipw_across_seeds <- function(results_list){
   
+  res_df <- lapply(1:length(results_list), function(res_num){
+    x <- results_list[[res_num]]
+    
+    results_object <- x$aipw_est$results_object
+    
+    # AIPW for case_control analysis
+    if(class(results_object) == "aipw_case_control"){
+      
+      res_df <- data.frame()
+      
+      # Add results for E[Growth | Infection = 1, Abx = abx_level]
+      for(i in 1:length(results_object$results_df$abx_levels)){
+        abx_level <- results_object$results_df$abx_levels[i]
+        
+        pt_est <- results_object$results_df$abx_level_case[results_object$results_df$abx_levels == abx_level]
+        se <- results_object$se[paste0("case_eif_", abx_level)]
+        
+        tmp <- data.frame(pt_est,
+                          se)
+        
+        res_df <- rbind(res_df, tmp)
+        
+      }
+      
+      # Add results for E[Growth | Control]
+      control_res <- data.frame(results_object$results_df$abx_level_control[1],
+                                results_object$se["control_eif"])
+      
+      res_df <- rbind(as.matrix(res_df), as.matrix(control_res))
+      
+      # Add results for effects
+      for(i in 1:length(results_object$results_df$abx_levels)){
+        abx_level <- results_object$results_df$abx_levels[i]
+        
+        pt_est <- results_object$results_df$effect_inf_abx_level[results_object$results_df$abx_levels == abx_level]
+        se <- results_object$se[paste0("effect_", abx_level)]
+        
+        tmp <- data.frame(pt_est,
+                          se)
+        
+        res_df <- rbind(as.matrix(res_df), as.matrix(tmp))
+        
+      }
+      
+      res_df <- data.frame(res_df)
+      
+    } else {
+      # Non-case control
+      
+      res_df <- data.frame()
+      
+      for(i in 1:length(results_object$results_df$abx_levels)){
+        abx_level <- results_object$results_df$abx_levels[i]
+        
+        pt_est_inf <- results_object$results_df$abx_level_inf_1[results_object$results_df$abx_levels == abx_level]
+        pt_est_no_attr <- results_object$results_df$abx_level_inf_0[results_object$results_df$abx_levels == abx_level]
+        pt_est_effect <- results_object$results_df$effect_inf_abx_level[results_object$results_df$abx_levels == abx_level]
+        
+        se_inf <- results_object$se[paste0('inf_eif_', abx_level)]
+        se_no_attr <- results_object$se[paste0('no_attr_eif_', abx_level)]
+        se_effect <- results_object$se[paste0('effect_', abx_level)]
+        
+        tmp <- data.frame(result_num = rep(res_num, 3),
+                          abx = rep(abx_level, 3),
+                          inf = c("inf",
+                            "no_etiology",
+                            "effect"),
+                          pt_est = c(pt_est_inf,
+                            pt_est_no_attr,
+                            pt_est_effect),
+                          se = c(se_inf,
+                            se_no_attr,
+                            se_effect))
+        
+        res_df <- rbind(res_df, tmp)
+        
+      }
+    }
+      
+      return(res_df)
+  })
+  
+  res_df <- do.call(rbind, res_df)
+  
+  combos <- expand.grid(abx = unique(res_df$abx),
+                        inf = unique(res_df$inf))
+  
+  avg_res <- data.frame()
+  
+  for(row in 1:nrow(combos)){
+    sub_res_df <- res_df[res_df$abx == combos[row,]$abx & res_df$inf == combos[row,]$inf,]
+    
+    sub_avg_res <- data.frame(abx = sub_res_df$abx[1],
+                          inf = sub_res_df$inf[1], 
+                          pt_est = mean(sub_res_df$pt_est),
+                          se = sqrt(mean((sub_res_df$se^2))))
+    
+    avg_res <- rbind(avg_res, sub_avg_res)
+    
+  }
+  
+  avg_res$lower_bound <- avg_res$pt_est - 1.96*avg_res$se
+  avg_res$upper_bound <- avg_res$pt_est + 1.96*avg_res$se
+    
+  #class(avg_res) <- "average_res_agaipw"
+  
+  return(avg_res)
+  
+}

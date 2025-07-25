@@ -47,7 +47,8 @@ aipw_other_diarrhea <- function(data,
                                 msm = FALSE,
                                 msm_var_name = NULL,
                                 msm_formula = NULL,
-                                ps_trunc_level = 0.01){
+                                ps_trunc_level = 0.01,
+                                all_other_diarrhea = FALSE){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -142,13 +143,13 @@ aipw_other_diarrhea <- function(data,
     data_abx <- data
     data_abx[[abx_var_name]] <- abx_level
     
-    ## 2a: Predictions from 1a (cases)
+    ## 2a: Predictions from 1a (shigella)
     
     outcome_vectors_1a[, i] <- stats::predict(outcome_model_1a, newdata = data_abx[, c(abx_var_name,
                                                                                        covariate_list)], type = "response")$pred
     
     
-    ## 2b: Predictions from 1b (controls)
+    ## 2b: Predictions from 1b (other attr)
     
     outcome_vectors_1b[, i] <- stats::predict(outcome_model_1b, newdata = data_abx[, c(abx_var_name,
                                                                                        covariate_list)], type = "response")$pred
@@ -205,13 +206,6 @@ aipw_other_diarrhea <- function(data,
   # ------------------------------------------------------------
   # STEP 2: Fit & predict from propensity models
   # ------------------------------------------------------------
-  
-  # If site in covariate_list, remove
-  # if(!any(is.na(site_var_name))){
-  #   covariate_list_no_site <- covariate_list[!(covariate_list %in% site_var_name)]
-  # } else{
-  #   covariate_list_no_site <- covariate_list
-  # }
   
   # If followup_days related variables, remove from missingness models
   if(!any(is.na(followup_var_names))){
@@ -339,15 +333,22 @@ aipw_other_diarrhea <- function(data,
     no_etiology_var_name <- "no_etiology"
   } 
   
-  prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
-                                                X = sub_no_shig[,covariate_list , drop = FALSE],
-                                                newX = data[,covariate_list , drop = FALSE],
-                                                family = stats::binomial(),
-                                                SL.library = sl.library.infection,
-                                                cvControl = list(V = v_folds))
+  if(!all_other_diarrhea){
+    prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
+                                                  X = sub_no_shig[,covariate_list , drop = FALSE],
+                                                  newX = data[,covariate_list , drop = FALSE],
+                                                  family = stats::binomial(),
+                                                  SL.library = sl.library.infection,
+                                                  cvControl = list(V = v_folds))
+    
+    tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
+    prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
+  } else {
+    # If shigella vs all other diarrhea no need to model
+    prop_model_2a_2 <- NULL
+    prop_vectors_2a$no_attr <- 1 - prop_vectors_2a$inf_attr
+  }
   
-  tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
-  prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
   
   ## Part 3: Propensity models for missingness
   
@@ -684,6 +685,8 @@ aipw_other_diarrhea <- function(data,
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
+#' @param parsimonious_propensity default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)
+#' @param all_other_diarrhea flag for sensitivity analysis comparison to all_other_diarrhea, default FALSE
 #' 
 #' @keywords internal
 #' 
@@ -711,7 +714,9 @@ aipw_other_diarrhea_2 <- function(data,
                                   msm = FALSE,
                                   msm_var_name = NULL,
                                   msm_formula = NULL,
-                                  ps_trunc_level = 0.01){
+                                  ps_trunc_level = 0.01,
+                                  parsimonious_propensity = TRUE,
+                                  all_other_diarrhea = FALSE){
   
   # ------------------------------------------------------------
   # STEP 0: Create subsets of data for model fitting
@@ -1044,25 +1049,52 @@ aipw_other_diarrhea_2 <- function(data,
   tmp_pred_2a_1 <- prop_model_2a_1$SL.pred
   prop_vectors_2a$inf_attr <- tmp_pred_2a_1
   
-  # 2a_2 = No attribution ~ BL Cov | Shigella Attr == 0
-  
-  sub_no_shig <- data[which(data[[infection_var_name]] == 0),]
-  
-  # if data has var indicating no etiology, use that. otherwise make a var for it
-  if(is.na(no_etiology_var_name)){
-    sub_no_shig$no_etiology <- ifelse(rowSums(sub_no_shig[,pathogen_attributable_list]) == 0, 1, 0)
-    no_etiology_var_name <- "no_etiology"
-  } 
-  
-  prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
-                                                X = sub_no_shig[,covariate_list , drop = FALSE],
-                                                newX = data[,covariate_list , drop = FALSE],
-                                                family = stats::binomial(),
-                                                SL.library = sl.library.infection,
-                                                cvControl = list(V = v_folds))
-  
-  tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
-  prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
+  # 2a_2 = 1 - 2a_1 OR No attribution ~ BL Cov | Shigella Attr == 0 OR No attribution ~ BL Cov
+  if(all_other_diarrhea){
+    # comparison to all other diarrhea so prediction is 1 - shigella attr
+    prop_model_2a_2 <- NULL
+    prop_vectors_2a$no_attr <- 1 - prop_vectors_2a$inf_attr
+  } else if(parsimonious_propensity){
+    
+    # 2a_2 = No attribution ~ BL Cov | Shigella Attr == 0
+    sub_no_shig <- data[which(data[[infection_var_name]] == 0),]
+    
+    # if data has var indicating no etiology, use that. otherwise make a var for it
+    if(is.na(no_etiology_var_name)){
+      sub_no_shig$no_etiology <- ifelse(rowSums(sub_no_shig[,pathogen_attributable_list]) == 0, 1, 0)
+      no_etiology_var_name <- "no_etiology"
+    } 
+    
+    prop_model_2a_2 <- SuperLearner::SuperLearner(Y = sub_no_shig[[no_etiology_var_name]],
+                                                  X = sub_no_shig[,covariate_list , drop = FALSE],
+                                                  newX = data[,covariate_list , drop = FALSE],
+                                                  family = stats::binomial(),
+                                                  SL.library = sl.library.infection,
+                                                  cvControl = list(V = v_folds))
+    
+    tmp_pred_2a_2 <- prop_model_2a_2$SL.pred
+    prop_vectors_2a$no_attr <- tmp_pred_2a_2 * (1 - prop_vectors_2a$inf_attr)
+    
+    
+  }else{
+    # 2a_2 = No attribution ~ BL Cov 
+    
+    # if data has var indicating no etiology, use that. otherwise make a var for it
+    if(is.na(no_etiology_var_name)){
+      data$no_etiology <- ifelse(rowSums(data[,pathogen_attributable_list]) == 0, 1, 0)
+      no_etiology_var_name <- "no_etiology"
+    } 
+    
+    prop_model_2a_2 <- SuperLearner::SuperLearner(Y = data[[no_etiology_var_name]],
+                                                  X = data[,covariate_list , drop = FALSE],
+                                                  newX = data[,covariate_list , drop = FALSE],
+                                                  family = stats::binomial(),
+                                                  SL.library = sl.library.infection,
+                                                  cvControl = list(V = v_folds))
+    
+    prop_vectors_2a$no_attr <- prop_model_2a_2$SL.pred
+    
+  }
   
   ###############################################
   ## Part 3: Propensity models for missingness ##
@@ -1072,25 +1104,48 @@ aipw_other_diarrhea_2 <- function(data,
   prop_covariates_inf_attr <- covariates_inf_attr[, colnames(covariates_inf_attr) %in% covariate_list_no_followup , drop = FALSE]
   prop_covariates_no_attr <- covariates_no_attr[, colnames(covariates_no_attr) %in% covariate_list_no_followup , drop = FALSE]
   
-  ## Missingness model in infection attributable
-  prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
-                                              X = data.frame(abx_inf_attr,
-                                                             prop_covariates_inf_attr,
-                                                             severity_inf_attr,
-                                                             pathogen_q_inf_attr),
-                                              family = stats::binomial(),
-                                              SL.library = sl.library.missingness,
-                                              cvControl = list(V = v_folds))
+  ## Missingness model in infection attributable (if there is missingness)
+  if(sum(I_Y_inf_attr) == 0){
+    # no missingness; dummy model that returns 0 for all
+    prop_model_3a <- list()
+    class(prop_model_3a) <- "constant_zero_model"
+    
+    predict.constant_zero_model <- function(object, newdata, ...) {
+      list(pred = rep(0, nrow(newdata)))
+    }
+    
+  } else{
+    
+    prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
+                                                X = data.frame(abx_inf_attr,
+                                                               prop_covariates_inf_attr,
+                                                               severity_inf_attr,
+                                                               pathogen_q_inf_attr),
+                                                family = stats::binomial(),
+                                                SL.library = sl.library.missingness,
+                                                cvControl = list(V = v_folds))
+  }
   
   ## Missingness model in no etiology 
-  prop_model_3b <- SuperLearner::SuperLearner(Y = I_Y_no_attr,
-                                              X = data.frame(abx_no_attr,
-                                                             prop_covariates_no_attr,
-                                                             severity_no_attr,
-                                                             pathogen_q_no_attr),
-                                              family = stats::binomial(),
-                                              SL.library = sl.library.missingness,
-                                              cvControl = list(V = v_folds))
+  
+  if(sum(I_Y_no_attr) == 0){
+    # no missingness; dummy model that returns 0 for all
+    prop_model_ba <- list()
+    class(prop_model_3b) <- "constant_zero_model"
+    
+    predict.constant_zero_model <- function(object, newdata, ...) {
+      list(pred = rep(0, nrow(newdata)))
+    }
+  } else{
+    prop_model_3b <- SuperLearner::SuperLearner(Y = I_Y_no_attr,
+                                                X = data.frame(abx_no_attr,
+                                                               prop_covariates_no_attr,
+                                                               severity_no_attr,
+                                                               pathogen_q_no_attr),
+                                                family = stats::binomial(),
+                                                SL.library = sl.library.missingness,
+                                                cvControl = list(V = v_folds))
+  }
   
   # Predict setting each abx level
   for(i in 1:length(abx_levels)){
@@ -1711,29 +1766,48 @@ aipw_case_control <- function(data,
   covariates_case_no_site <- case_data[, covariate_list_no_followup, drop = FALSE]
   covariates_control_no_site <- control_data[, covariate_list_no_followup, drop = FALSE]
   
-  ## Missingness model in cases
-  prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_case,
-                                              X = data.frame(abx_case,
-                                                             covariates_case_no_site,
-                                                             severity_case,
-                                                             pathogen_q_case),
-                                              family = stats::binomial(),
-                                              SL.library = sl.library.missingness.case,
-                                              cvControl = list(V = v_folds))
+  ## Missingness model in cases (if there is missingness)
+  if(sum(I_Y_case) == 0){
+    # no missingness; dummy model that returns 0 for all
+    prop_model_3a <- list()
+    class(prop_model_3a) <- "constant_zero_model"
+    
+    predict.constant_zero_model <- function(object, newdata, ...) {
+      list(pred = rep(0, nrow(newdata)))
+    }
+    
+  } else{
+    prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_case,
+                                                X = data.frame(abx_case,
+                                                               covariates_case_no_site,
+                                                               severity_case,
+                                                               pathogen_q_case),
+                                                family = stats::binomial(),
+                                                SL.library = sl.library.missingness.case,
+                                                cvControl = list(V = v_folds))
+  }
+  
   
   ## Missingness model in controls
-  prop_model_3b <- SuperLearner::SuperLearner(Y = I_Y_control,
-                                              X = data.frame(covariates_control_no_site),
-                                              family = stats::binomial(),
-                                              SL.library = sl.library.missingness.control,
-                                              cvControl = list(V = v_folds))
+  if(sum(I_Y_control) == 0){
+    # no missingness; dummy model that returns 0 for all
+    prop_model_3b <- list()
+    class(prop_model_3b) <- "constant_zero_model"
+    
+    predict.constant_zero_model <- function(object, newdata, ...) {
+      list(pred = rep(0, nrow(newdata)))
+    }
+  } else{
+    prop_model_3b <- SuperLearner::SuperLearner(Y = I_Y_control,
+                                                X = data.frame(covariates_control_no_site),
+                                                family = stats::binomial(),
+                                                SL.library = sl.library.missingness.control,
+                                                cvControl = list(V = v_folds))
+  }
   
   # Predict setting each abx level
   for(i in 1:length(abx_levels)){
     abx_level <- abx_levels[i]
-    
-    # case data no site does not exist? 
-    #pred_data <- case_data_no_site
     
     pred_data <- case_data
     pred_data[[abx_var_name]] <- abx_level
@@ -1771,18 +1845,34 @@ aipw_case_control <- function(data,
   
   # Truncate any large propensity scores
   if(!is.na(ps_trunc_level)){
-    #  any observation that is < ps_trunc_level or > 1-ps_trunc_level should be changed to ps_trunc_level or 1 - ps_trunc_level
+    # if appears in denominator, truncate away from 0
+    # if 1 - appears in denominator, truncate away from 1
+    # if both, truncate both directions
     
-    truncate_ps <- function(mat, ps_trunc_level){
-      mat[mat < ps_trunc_level] <- ps_trunc_level
-      mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+    # based on AIPWs for case and control below:
+    # 1a away from 0 
+    # 2a away from 0,1
+    # 3a away from 1
+    # 3b away from 1
+    
+    truncate_ps <- function(mat, ps_trunc_level, upper = TRUE, lower = TRUE){
+      # away from 0
+      if(lower){
+        mat[mat < ps_trunc_level] <- ps_trunc_level
+      }
+      
+      # away from 1
+      if(upper){
+        mat[mat > 1- ps_trunc_level] <- 1- ps_trunc_level
+      }
+      
       return(mat)
     }
     
-    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
-    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
-    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
-    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level, upper = FALSE, lower = TRUE)
+    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level, upper = TRUE, lower = TRUE)
+    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level, upper = TRUE, lower = FALSE)
+    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level, upper = TRUE, lower = FALSE)
   }
   
   for(i in 1:length(abx_levels)){
@@ -1825,16 +1915,16 @@ aipw_case_control <- function(data,
   P_control__Covariates <- 1 - prop_vectors_2a[,1]
   
   I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
-  I_Delta_0__Control_all <- 1 - prop_vectors_3b[,1]
+  P_Delta_0__Control_all <- 1 - prop_vectors_3b[,1]
   
   P_Case__all <- prop_vectors_2a[,1]
   
   Qbar_Control_Covariates <- outcome_vectors_1b[,1]
   
-  eif_control_vec <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates) +
+  eif_control_vec <- (I_control / P_control__Covariates) * (I_Delta_0 / P_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates) +
     (I_Case / P_Case) * (Qbar_Control_Covariates - plug_ins_control)
   
-  control_eif_msm <- (I_control / P_control__Covariates) * (I_Delta_0 / I_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates)
+  control_eif_msm <- (I_control / P_control__Covariates) * (I_Delta_0 / P_Delta_0__Control_all) * (P_Case__all / P_Case) * (obs_outcome - Qbar_Control_Covariates)
   
   control_eif <- eif_control_vec
   

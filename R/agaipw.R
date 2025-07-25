@@ -32,6 +32,7 @@
 #' @param msm_var_name name of variable to use for msm
 #' @param msm_formula chatacter vector with formula to use for msm if msm TRUE
 #' @param ps_trunc_level numeric value to truncate propensity scores `< ps_trunc_level` or `> 1 - ps_trunc_level`. Default to 0.01
+#' @param parsimonious_propensity default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)
 #' 
 #' @export
 #' 
@@ -66,7 +67,9 @@ agaipw <- function(data,
                     msm = FALSE,
                     msm_var_name = NULL,
                     msm_formula = NULL,
-                    ps_trunc_level = 0.01){
+                    ps_trunc_level = 0.01, 
+                    parsimonious_propensity = TRUE,
+                    all_other_diarrhea = FALSE){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -99,7 +102,9 @@ agaipw <- function(data,
                                         msm = msm,
                                         msm_var_name = msm_var_name,
                                         msm_formula = msm_formula, 
-                                        ps_trunc_level = ps_trunc_level)
+                                        ps_trunc_level = ps_trunc_level,
+                                        parsimonious_propensity = parsimonious_propensity,
+                                        all_other_diarrhea = all_other_diarrhea)
     } else {
       # Do not include second stage outcome regression
       aipw_est <- aipw_other_diarrhea(data = data,
@@ -123,7 +128,8 @@ agaipw <- function(data,
                                       msm = msm,
                                       msm_var_name = msm_var_name,
                                       msm_formula = msm_formula,
-                                      ps_trunc_level = ps_trunc_level)
+                                      ps_trunc_level = ps_trunc_level,
+                                      all_other_diarrhea = all_other_diarrhea)
     }
     
     parameters <- list(laz_var_name = laz_var_name,

@@ -35,7 +35,8 @@ agaipw(
   msm = FALSE,
   msm_var_name = NULL,
   msm_formula = NULL,
-  ps_trunc_level = 0.01
+  ps_trunc_level = 0.01,
+  parsimonious_propensity = TRUE
 )
 }
 \arguments{
@@ -98,6 +99,8 @@ agaipw(
 \item{msm_formula}{chatacter vector with formula to use for msm if msm TRUE}
 
 \item{ps_trunc_level}{numeric value to truncate propensity scores \verb{< ps_trunc_level} or \verb{> 1 - ps_trunc_level}. Default to 0.01}
+
+\item{parsimonious_propensity}{default TRUE for no etiology (TODO: FILL IN, IDK WHAT THIS MEANS. ALSO CAN WE RENAME IT? THIS IS LONG)}
 }
 \value{
 List of class \code{agaipw_res} containing objects for AIPW result, AIPW models.
