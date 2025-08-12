@@ -1,23 +1,18 @@
-Package: abxGrowth
 Type: Package
-Title: AIPW and G-Computation methods for estimating growth outcomes under different antibiotic treatment settings
-Version: 0.1.0
+Package: vegrowth
+Title: Estimands for estimating the impact of vaccines on growth
+    following infection
+Version: 0.0.1
 Author: Allison Codi
 Maintainer: Allison Codi <allison.codi@emory.edu>
-Description: This package implements AIPW and g-computation to estimate the effect of antibiotics on growth. 
+Description: This package implements estimands for estimating
+    the impact of vaccines on growth following an infection
 License: MIT + file LICENSE
-Depends: R (>= 3.0.0)
-Imports: 
-  splines,
-  stats,
-  ggplot2,
-  gtsummary,
-  table1,
-  fastDummies,
-  dplyr, 
-  labelled,
-  patchwork,
-  SuperLearner
+Depends:
+    R (>= 3.0.0)
+Imports:
+    stats,
+    SuperLearner
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
