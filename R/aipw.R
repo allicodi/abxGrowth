@@ -2211,7 +2211,8 @@ aipw_case_control_2 <- function(data,
   # Replace NA controls with 0
   outcome_vectors_1a[is.na(outcome_vectors_1a)] <- 0
   
-  outcome_vectors_1b[, 1] <- stats::predict(outcome_model_1b, newdata = data[,covariate_list], type = "response")$pred
+  outcome_vectors_1b[, 1] <- stats::predict(outcome_model_1b, newdata = data[,c(covariate_list,
+                                                                             pathogen_quantity_list)], type = "response")$pred
   
   # Add predictions to control data
   control_data$outcome_1b <- outcome_vectors_1b[control_data_idx,1]
@@ -2225,11 +2226,11 @@ aipw_case_control_2 <- function(data,
     Y = control_data$outcome_1b,
     X = covariates_control,
     family = outcome_type,
-    SL.library = sl.library.outcome.2,
+    SL.library = sl.library.outcome.control.2,
     cvControl = list(V = v_folds)
   )
   
-  outcome_vectors_2b[, i] <- stats::predict(outcome_model_2b, newdata = data[, c(covariate_list)], type = "response")$pred
+  outcome_vectors_2b[, 1] <- stats::predict(outcome_model_2b, newdata = data[, c(covariate_list)], type = "response")$pred
   
   if(msm){
     
