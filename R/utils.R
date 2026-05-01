@@ -1048,7 +1048,7 @@ impute_covariates <- function(data,
   }
   
   for(cov_name in imp_covariates){
-    
+
     imputed_flag_name <- paste0(cov_name, "_imputed")
     data[[imputed_flag_name]] <- ifelse(is.na(data[[cov_name]]), 1, 0)
     

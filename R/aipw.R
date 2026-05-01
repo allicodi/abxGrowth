@@ -66,6 +66,10 @@ aipw_other_diarrhea <- function(data,
   # Full data (including missing outcome)
   I_Y_inf_attr <- ifelse(is.na(sub_inf_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
   Y_inf_attr <- sub_inf_attr[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_inf_attr) <- NULL
+  
   covariates_inf_attr <- sub_inf_attr[, covariate_list, drop = FALSE]
   abx_inf_attr <- sub_inf_attr[, abx_var_name, drop = FALSE]
   
@@ -73,6 +77,10 @@ aipw_other_diarrhea <- function(data,
   sub_inf_attr_complete <- sub_inf_attr[!is.na(sub_inf_attr[[laz_var_name]]), ]
   
   Y_inf_attr_complete <- sub_inf_attr_complete[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_inf_attr_complete) <- NULL
+  
   covariates_inf_attr_complete <- sub_inf_attr_complete[, covariate_list, drop = FALSE]
   abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
   
@@ -90,11 +98,19 @@ aipw_other_diarrhea <- function(data,
   
   I_Y_no_attr <- ifelse(is.na(sub_no_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
   Y_no_attr <- sub_no_attr[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_no_attr) <- NULL
+  
   covariates_no_attr <- sub_no_attr[, covariate_list, drop = FALSE]
   abx_no_attr <- sub_no_attr[, abx_var_name, drop = FALSE]
   
   sub_no_attr_complete <- sub_no_attr[!is.na(sub_no_attr[[laz_var_name]]), ]
   Y_no_attr_complete <- sub_no_attr_complete[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_no_attr_complete) <- NULL
+  
   covariates_no_attr_complete <- sub_no_attr_complete[, covariate_list, drop = FALSE]
   abx_no_attr_complete <- sub_no_attr_complete[, abx_var_name, drop = FALSE]
   
@@ -734,6 +750,10 @@ aipw_other_diarrhea_2 <- function(data,
   # Full data (including missing outcome)
   I_Y_inf_attr <- ifelse(is.na(sub_inf_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
   Y_inf_attr <- sub_inf_attr[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_inf_attr) <- NULL
+  
   covariates_inf_attr <- sub_inf_attr[, covariate_list, drop = FALSE]
   severity_inf_attr <- sub_inf_attr[, severity_list, drop = FALSE]
   pathogen_q_inf_attr <- sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
@@ -743,6 +763,10 @@ aipw_other_diarrhea_2 <- function(data,
   sub_inf_attr_complete <- sub_inf_attr[!is.na(sub_inf_attr[[laz_var_name]]), ]
   
   Y_inf_attr_complete <- sub_inf_attr_complete[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_inf_attr_complete) <- NULL
+  
   covariates_inf_attr_complete <- sub_inf_attr_complete[, covariate_list, drop = FALSE]
   severity_inf_attr_complete <- sub_inf_attr_complete[, severity_list, drop = FALSE]
   pathogen_q_inf_attr_complete <- sub_inf_attr_complete[, pathogen_quantity_list, drop = FALSE]
@@ -762,6 +786,10 @@ aipw_other_diarrhea_2 <- function(data,
   
   I_Y_no_attr <- ifelse(is.na(sub_no_attr[[laz_var_name]]), 1, 0) #indicator for Y missing
   Y_no_attr <- sub_no_attr[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_no_attr) <- NULL
+  
   covariates_no_attr <- sub_no_attr[, covariate_list, drop = FALSE]
   severity_no_attr <- sub_no_attr[, severity_list, drop = FALSE]
   pathogen_q_no_attr <- sub_no_attr[, pathogen_quantity_list, drop = FALSE]
@@ -769,6 +797,10 @@ aipw_other_diarrhea_2 <- function(data,
   
   sub_no_attr_complete <- sub_no_attr[!is.na(sub_no_attr[[laz_var_name]]), ]
   Y_no_attr_complete <- sub_no_attr_complete[[laz_var_name]]
+  
+  # remove attributes to avoid error in xgboost
+  attributes(Y_no_attr_complete) <- NULL
+  
   covariates_no_attr_complete <- sub_no_attr_complete[, covariate_list, drop = FALSE]
   severity_no_attr_complete <- sub_no_attr_complete[, severity_list, drop = FALSE]
   pathogen_q_no_attr_complete <- sub_no_attr_complete[, pathogen_quantity_list, drop = FALSE]
