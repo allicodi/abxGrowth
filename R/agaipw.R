@@ -43,6 +43,7 @@ agaipw <- function(data,
                     laz_var_name,
                     abx_var_name,
                     infection_var_name = NA,
+                    subinfection_var_name = NA,
                     case_var_name = NA,
                     site_var_name = NA,
                     followup_var_names = NA,
@@ -72,7 +73,8 @@ agaipw <- function(data,
                     ps_trunc_level = 0.01, 
                     parsimonious_propensity = TRUE,
                     all_other_diarrhea = FALSE,
-                    adjust_pathogen_case_control = FALSE){
+                    adjust_pathogen_case_control = FALSE,
+                    subinfection_analysis = FALSE){
   
   # Set seed for reproducibility
   set.seed(seed)
@@ -81,33 +83,67 @@ agaipw <- function(data,
     
     ## Other diarrhea analysis
     if(!is.null(severity_list)){
-      # Include second stage outcome regression
-      aipw_est <- aipw_other_diarrhea_2(data = data,
-                                        laz_var_name = laz_var_name,
-                                        abx_var_name = abx_var_name,
-                                        infection_var_name = infection_var_name,
-                                        site_var_name = site_var_name,
-                                        followup_var_names = followup_var_names,
-                                        covariate_list = covariate_list,
-                                        severity_list = severity_list,
-                                        pathogen_quantity_list = pathogen_quantity_list,
-                                        pathogen_attributable_list = pathogen_attributable_list,
-                                        no_etiology_var_name = no_etiology_var_name,
-                                        outcome_type = outcome_type,
-                                        sl.library.outcome = sl.library.outcome,
-                                        sl.library.outcome.2 = sl.library.outcome.2,
-                                        sl.library.treatment = sl.library.treatment,
-                                        sl.library.infection = sl.library.infection,
-                                        sl.library.missingness = sl.library.missingness,
-                                        v_folds = v_folds,
-                                        return_models = return_models,
-                                        first_id_var_name = first_id_var_name,
-                                        msm = msm,
-                                        msm_var_name = msm_var_name,
-                                        msm_formula = msm_formula, 
-                                        ps_trunc_level = ps_trunc_level,
-                                        parsimonious_propensity = parsimonious_propensity,
-                                        all_other_diarrhea = all_other_diarrhea)
+      
+      if(!subinfection_analysis){
+        # Include second stage outcome regression
+        aipw_est <- aipw_other_diarrhea_2(data = data,
+                                          laz_var_name = laz_var_name,
+                                          abx_var_name = abx_var_name,
+                                          infection_var_name = infection_var_name,
+                                          site_var_name = site_var_name,
+                                          followup_var_names = followup_var_names,
+                                          covariate_list = covariate_list,
+                                          severity_list = severity_list,
+                                          pathogen_quantity_list = pathogen_quantity_list,
+                                          pathogen_attributable_list = pathogen_attributable_list,
+                                          no_etiology_var_name = no_etiology_var_name,
+                                          outcome_type = outcome_type,
+                                          sl.library.outcome = sl.library.outcome,
+                                          sl.library.outcome.2 = sl.library.outcome.2,
+                                          sl.library.treatment = sl.library.treatment,
+                                          sl.library.infection = sl.library.infection,
+                                          sl.library.missingness = sl.library.missingness,
+                                          v_folds = v_folds,
+                                          return_models = return_models,
+                                          first_id_var_name = first_id_var_name,
+                                          msm = msm,
+                                          msm_var_name = msm_var_name,
+                                          msm_formula = msm_formula, 
+                                          ps_trunc_level = ps_trunc_level,
+                                          parsimonious_propensity = parsimonious_propensity,
+                                          all_other_diarrhea = all_other_diarrhea)
+      } else{
+        aipw_est <- aipw_sub_infection_2(
+          data = data,
+          laz_var_name = laz_var_name,
+          abx_var_name = abx_var_name,
+          infection_var_name = infection_var_name,
+          subinfection_var_name = subinfection_var_name,
+          site_var_name = site_var_name,
+          followup_var_names = followup_var_names,
+          covariate_list = covariate_list,
+          severity_list = severity_list,
+          pathogen_quantity_list = pathogen_quantity_list,
+          pathogen_attributable_list = pathogen_attributable_list,
+          no_etiology_var_name = no_etiology_var_name,
+          outcome_type = outcome_type,
+          sl.library.outcome = sl.library.outcome,
+          sl.library.outcome.2 = sl.library.outcome.2,
+          sl.library.treatment = sl.library.treatment,
+          sl.library.infection = sl.library.infection,
+          sl.library.missingness = sl.library.missingness,
+          v_folds = v_folds,
+          return_models = return_models,
+          first_id_var_name = first_id_var_name,
+          msm = msm,
+          msm_var_name = msm_var_name,
+          msm_formula = msm_formula, 
+          ps_trunc_level = ps_trunc_level,
+          parsimonious_propensity = parsimonious_propensity,
+          all_other_diarrhea = all_other_diarrhea
+        )
+      }
+      
     } else {
       # Do not include second stage outcome regression
       aipw_est <- aipw_other_diarrhea(data = data,
@@ -147,7 +183,8 @@ agaipw <- function(data,
                        sl.library.missingness = sl.library.missingness,
                        msm = msm,
                        msm_var_name = msm_var_name,
-                       msm_formula = msm_formula)
+                       msm_formula = msm_formula,
+                       subinfection_analysis = subinfection_analysis)
     
   } else{
     

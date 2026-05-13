@@ -1,9 +1,11 @@
-#' Function for AIPW estimates of effect of infection on growth- two-stage outcome regression
+#' Function for AIPW estimates of effect of sub-infection on growth 
+#' Sub-infection is sub-type of main infection (ex. Shigella with dysentery, different Shigella serotypes)
 #' 
 #' @param data dataframe containing dataset used for gcomp
 #' @param laz_var_name name of growth outcome variable
 #' @param abx_var_name name of binary antibiotic variable
 #' @param infection_var_name name of binary infection variable (for other diarrhea analyses; case_control = FALSE)
+#' @param subinfection_var_name = 0 if infection_var_name = 0; = 1, 2, ... otherwise specifying a specific type of infection
 #' @param site_var_name name of covariate for site (to exclude from propensity models)
 #' @param covariate_list character vector containing names of baseline covariates
 #' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, use AIPW without second stage regression
@@ -30,12 +32,13 @@
 #' 
 #' @keywords internal
 #' 
-#' @returns List containing `aipw_other_diarrhea_2` object, models (if return_models = TRUE). `aipw_other_diarrhea_2` object contains dataframe with results, covariance matrix, standard errors.
-aipw_other_diarrhea_2 <- function(data,
+#' @returns List containing `aipw_sub_infection_2` object, models (if return_models = TRUE). `aipw_sub_infection_2` object contains dataframe with results, covariance matrix, standard errors.
+aipw_sub_infection_2 <- function(data,
                                   laz_var_name,
                                   abx_var_name,
                                   infection_var_name,
                                   subinfection_var_name, # = 0 if infection_var_name = 0; = 1, 2, ... otherwise specifying a specific type of infection
+                                  complete_subinfection = TRUE, # if types 1, 2, ... include all subinfections = TRUE (ex. dysentery); = FALSE if there are additional subinfections that do not fall into the category (ex. non-typed shigella)
                                   site_var_name,
                                   followup_var_names,
                                   covariate_list,
@@ -457,21 +460,89 @@ aipw_other_diarrhea_2 <- function(data,
                                                 cvControl = list(V = v_folds))
   tmp_pred_2a_1 <- prop_model_2a_1$SL.pred
   prop_vectors_2a$inf_attr <- tmp_pred_2a_1
-
-  # 2b_1 = I(subinfection_var_levels == subinfection_var_levels[1]) ~ BL Cov | Shigella Attributable
-  prop_model_2b_1 <- SuperLearner::SuperLearner(Y = as.numeric(
-                                                      data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[1]
-                                                    ),
-                                                X = data[data[[infection_var_name]] == 1, covariate_list , drop = FALSE], 
-                                                newX = data[, covariate_list, drop = FALSE],
-                                                family = stats::binomial(),
-                                                SL.library = sl.library.infection, 
-                                                cvControl = list(V = v_folds))
-  P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
-  P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
-  P_subinfect_is_level_2_given_attr <- 1 - P_subinfect_is_level_1_given_attr
-  P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
-
+  
+  if(complete_subinfection){
+    # ex. dysentery vs no dysentery
+    
+    # 2b_1 = I(subinfection_var_levels == subinfection_var_levels[1]) ~ BL Cov | Shigella Attributable
+    # NOTE check this -- did not work as initially written
+    prop_model_2b_1 <- SuperLearner::SuperLearner(
+      Y = as.numeric(
+        data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[2] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
+      ),
+      X = data[data[[infection_var_name]] == 1, covariate_list , drop = FALSE], 
+      newX = data[, covariate_list, drop = FALSE],
+      family = stats::binomial(),
+      SL.library = sl.library.infection, 
+      cvControl = list(V = v_folds)
+    )
+    
+    P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
+    P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
+    P_subinfect_is_level_2_given_attr <- 1 - P_subinfect_is_level_1_given_attr
+    P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
+    
+    # initial attempt:
+    # prop_model_2b_1 <- SuperLearner::SuperLearner(Y = as.numeric(
+    #                                                     data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[1]
+    #                                                   ),
+    #                                               X = data[data[[infection_var_name]] == 1, covariate_list , drop = FALSE], 
+    #                                               newX = data[, covariate_list, drop = FALSE],
+    #                                               family = stats::binomial(),
+    #                                               SL.library = sl.library.infection, 
+    #                                               cvControl = list(V = v_folds))
+    # P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
+    # P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
+    # P_subinfect_is_level_2_given_attr <- 1 - P_subinfect_is_level_1_given_attr
+    # P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
+    
+  } else{
+    # Ex. shigella serotypes 
+    
+    # really this only generalizes to 3 levels as written with *_is_level_1 and *_is_level_2 
+    for(level in 1:2){
+      
+      # First subinfection model as is
+      if(level == 1){
+        prop_model_2b_1 <- SuperLearner::SuperLearner(
+          Y = as.numeric(
+            data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[2] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
+          ),
+          X = data[data[[infection_var_name]] == 1, 
+                   covariate_list , drop = FALSE], 
+          newX = data[, covariate_list, drop = FALSE],
+          family = stats::binomial(),
+          SL.library = sl.library.infection, 
+          cvControl = list(V = v_folds)
+        )
+        
+        P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
+        P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
+        
+      } else{
+        # Exclude previously modeled level
+        
+        prop_model_2b_2 <- SuperLearner::SuperLearner(
+          Y = as.numeric(
+            data[[subinfection_var_name]][data[[infection_var_name]] == 1 & data[[subinfection_var_name]] != subinfection_var_levels[2]] == subinfection_var_levels[3] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
+          ),
+          X = data[data[[infection_var_name]] == 1 & data[[subinfection_var_name]] != subinfection_var_levels[2], 
+                   covariate_list , drop = FALSE], 
+          newX = data[, covariate_list, drop = FALSE],
+          family = stats::binomial(),
+          SL.library = sl.library.infection, 
+          cvControl = list(V = v_folds)
+        )
+        
+        P_subinfect_is_level_2_given_attr_no_level_1 <- prop_model_2b_2$SL.pred
+        P_subinfect_is_level_2_given_attr <- P_subinfect_is_level_2_given_attr_no_level_1 * (1 - P_subinfect_is_level_1_given_attr)
+        P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
+        
+      }
+      
+    }
+  }
+  
   prop_vectors_2b$subinf_1 <- P_subinfect_is_level_1_and_attr
   prop_vectors_2b$subinf_2 <- P_subinfect_is_level_2_and_attr
 
@@ -613,8 +684,8 @@ aipw_other_diarrhea_2 <- function(data,
   inf_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   no_attr_eifs_msm <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
   
-  colnames(inf_subinfect1_eifs) <- paste0("inf_eif_", abx_levels)
-  colnames(inf_subinfect2_eifs) <- paste0("inf_eif_", abx_levels)
+  colnames(inf_subinfect1_eifs) <- paste0("inf_eif_1_", abx_levels)
+  colnames(inf_subinfect2_eifs) <- paste0("inf_eif_2_", abx_levels)
   colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
   
   colnames(inf_eifs_msm) <- paste0("inf_eif_", abx_levels)
@@ -639,8 +710,12 @@ aipw_other_diarrhea_2 <- function(data,
   }
   
   # 1 - Bias correction for shigella (or other infection) attributable, abx level = a
-  I_Inf_subinfect1_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[1])
-  I_Inf_subinfect2_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[2])
+  # NOTE also check this -- should be 2 and 3 i think
+  # I_Inf_subinfect1_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[1])
+  # I_Inf_subinfect2_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[2])
+  I_Inf_subinfect1_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[2])
+  I_Inf_subinfect2_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[3])
+  
   P_Inf_subinfect1_1 <- prop_vectors_2b$subinf_1
   P_Inf_subinfect2_1 <- prop_vectors_2b$subinf_2
 
@@ -890,7 +965,7 @@ aipw_other_diarrhea_2 <- function(data,
                            se = eif_hat)
   }
   
-  class(results_object) <- "aipw_other_diarrhea_2"
+  class(results_object) <- "aipw_sub_infection_2"
   
   if(return_models){
     # Make list of models
