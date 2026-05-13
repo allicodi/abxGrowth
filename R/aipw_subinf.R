@@ -171,6 +171,7 @@ aipw_sub_infection_2 <- function(data,
   list_outcome_vectors_1a <- vector(mode = "list", length = length(subinfection_var_levels))
   list_outcome_vectors_2a <- vector(mode = "list", length = length(subinfection_var_levels))
 
+  # Iterate through levels of subinfections (though note some downstream code does not generalize beyond 3 levels)
   subinfect_ct <- 0
   for(j in seq_along(subinfection_var_levels)){
     subinfect_ct <- subinfect_ct + 1
@@ -198,12 +199,10 @@ aipw_sub_infection_2 <- function(data,
       data_abx <- data
       data_abx[[abx_var_name]] <- abx_level
       
-      ## 2a: Predictions for infection = 1 (no 2nd stage model needed)
       pred_data <- data_abx[, c(abx_var_name, covariate_list, severity_list, pathogen_quantity_list)]
       pred_data[[subinfection_var_name]] <- subinfect_var_level
       list_outcome_vectors_1a[[subinfect_ct]][, i] <- stats::predict(outcome_model_1a, newdata = pred_data, type = "response")$pred
       
-      # Get sub_no_attr_complete with yhat_level_0 predictions using obs_id
       data$set_abx_and_subinfect_outcome <-  list_outcome_vectors_1a[[subinfect_ct]][, i]
       
       sub_subinfect_2b <- data[which(data[[subinfection_var_name]] == subinfect_var_level), ]
@@ -212,7 +211,7 @@ aipw_sub_infection_2 <- function(data,
         sl.library.outcome.2 <- sl.library.outcome
       }
       
-      ## Model 2b: Second stage regression model for no attribution
+      ## Model 2a: Second stage regression model, setting abx to level i and subinfection to level j
       outcome_model_2a <- SuperLearner::SuperLearner(
         Y = sub_subinfect_2b[['set_abx_and_subinfect_outcome']],
         X = sub_subinfect_2b[, covariate_list, drop = FALSE],
@@ -227,7 +226,7 @@ aipw_sub_infection_2 <- function(data,
         list_outcome_model_2a[[subinfect_ct]][[i]] <- outcome_model_2a
       }
 
-    
+      # Only need to do no etiology on first iteration through the outer loop (should have structured differently but leaving it)
       if(subinfect_ct == 1){
         ## 2b: Predictions from 1b + Second stage regression model for no attribution
         
@@ -270,6 +269,7 @@ aipw_sub_infection_2 <- function(data,
     }
   }
   
+  # Leaving in case we want to add later but no MSMs for subinfection 
   if(msm){
     stop("msm not done yet")
     # Subtract predictions
@@ -465,7 +465,7 @@ aipw_sub_infection_2 <- function(data,
     # ex. dysentery vs no dysentery
     
     # 2b_1 = I(subinfection_var_levels == subinfection_var_levels[1]) ~ BL Cov | Shigella Attributable
-    # NOTE check this -- did not work as initially written
+    # NOTE check this -- edited to == subinfection[2]
     prop_model_2b_1 <- SuperLearner::SuperLearner(
       Y = as.numeric(
         data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[2] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
@@ -887,12 +887,12 @@ aipw_sub_infection_2 <- function(data,
   eifs_effect_subinfect1 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   eifs_effect_subinfect2 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   
-  names(aipws_effect_subinfect1) <- paste0("effect_", abx_levels)
-  names(aipws_effect_subinfect2) <- paste0("effect_", abx_levels)
+  names(aipws_effect_subinfect1) <- paste0("effect_1_", abx_levels)
+  names(aipws_effect_subinfect2) <- paste0("effect_2_", abx_levels)
   # names(aipw_msm) <- paste0("msm_", abx_levels)
   
-  colnames(eifs_effect_subinfect1) <- paste0("effect_", abx_levels)
-  colnames(eifs_effect_subinfect2) <- paste0("effect_", abx_levels)
+  colnames(eifs_effect_subinfect1) <- paste0("effect_1_", abx_levels)
+  colnames(eifs_effect_subinfect2) <- paste0("effect_2_", abx_levels)
   
   # Compute effects for all levels of abx
   
