@@ -6,6 +6,7 @@
 #' @param abx_var_name name of binary antibiotic variable
 #' @param infection_var_name name of binary infection variable (for other diarrhea analyses; case_control = FALSE)
 #' @param subinfection_var_name = 0 if infection_var_name = 0; = 1, 2, ... otherwise specifying a specific type of infection
+#' @param complete_subinfection = TRUE if categories include all possible infection types (ex. dysentery vs no dysentery); false if additional irrelevant types (ex. sonnei, flex, other)
 #' @param site_var_name name of covariate for site (to exclude from propensity models)
 #' @param covariate_list character vector containing names of baseline covariates
 #' @param severity_list character vector containing names of severity-related covariates (post-infection). If NULL, use AIPW without second stage regression

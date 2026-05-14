@@ -44,6 +44,7 @@ agaipw <- function(data,
                     abx_var_name,
                     infection_var_name = NA,
                     subinfection_var_name = NA,
+                    complete_subinfection = TRUE, 
                     case_var_name = NA,
                     site_var_name = NA,
                     followup_var_names = NA,
@@ -140,7 +141,8 @@ agaipw <- function(data,
           msm_formula = msm_formula, 
           ps_trunc_level = ps_trunc_level,
           parsimonious_propensity = parsimonious_propensity,
-          all_other_diarrhea = all_other_diarrhea
+          all_other_diarrhea = all_other_diarrhea,
+          complete_subinfection = complete_subinfection
         )
       }
       
