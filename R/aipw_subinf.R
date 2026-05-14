@@ -166,10 +166,13 @@ aipw_sub_infection_2 <- function(data,
   abx_levels <- unique(data[[abx_var_name]])[!is.na(unique(data[[abx_var_name]]))]
   subinfection_var_levels <- unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))]
 
-  outcome_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))  
-  outcome_vectors_2b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))  
+  # list for each subinfection level * abx level
   list_outcome_vectors_1a <- vector(mode = "list", length = length(subinfection_var_levels))
   list_outcome_vectors_2a <- vector(mode = "list", length = length(subinfection_var_levels))
+  
+  # b = no attribution; only do once for first iteration (does not depend on subinfection)
+  outcome_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))  
+  outcome_vectors_2b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))  
 
   # Iterate through levels of subinfections (though note some downstream code does not generalize beyond 3 levels)
   subinfect_ct <- 0
@@ -194,6 +197,7 @@ aipw_sub_infection_2 <- function(data,
   
     # Iterate through each abx level
     for (i in 1:length(abx_levels)) {
+      
       abx_level <- abx_levels[i]
       
       data_abx <- data
@@ -211,6 +215,7 @@ aipw_sub_infection_2 <- function(data,
         sl.library.outcome.2 <- sl.library.outcome
       }
       
+      # NOTE/QUESTION: I don't think this should apply to subinfection level 0 (level 0 = no shigella). Leaving looping code as is, but will only use levels 1, 2 (list idx 2, 3) downstream
       ## Model 2a: Second stage regression model, setting abx to level i and subinfection to level j
       outcome_model_2a <- SuperLearner::SuperLearner(
         Y = sub_subinfect_2b[['set_abx_and_subinfect_outcome']],
@@ -671,8 +676,12 @@ aipw_sub_infection_2 <- function(data,
   
   ## Plug-in estimates
   
-  plug_ins_inf_subinfect1 <- colMeans(list_outcome_vectors_2a[[1]][inf_attr_idx, , drop = FALSE])
-  plug_ins_inf_subinfect2 <- colMeans(list_outcome_vectors_2a[[2]][inf_attr_idx, , drop = FALSE])
+  # NOTE I THINK WE WANT 2 and 3 HERE? 1 means nothing
+  #plug_ins_inf_subinfect1 <- colMeans(list_outcome_vectors_2a[[1]][inf_attr_idx, , drop = FALSE])
+  #plug_ins_inf_subinfect2 <- colMeans(list_outcome_vectors_2a[[2]][inf_attr_idx, , drop = FALSE])
+  
+  plug_ins_inf_subinfect1 <- colMeans(list_outcome_vectors_2a[[2]][inf_attr_idx, , drop = FALSE])
+  plug_ins_inf_subinfect2 <- colMeans(list_outcome_vectors_2a[[3]][inf_attr_idx, , drop = FALSE])
   plug_ins_no_attr <- colMeans(outcome_vectors_2b[inf_attr_idx, , drop = FALSE])
   
   ## Bias corrections
@@ -732,12 +741,17 @@ aipw_sub_infection_2 <- function(data,
     I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]])) # Indicator NOT missing
     P_Delta_0__Inf_all <- 1 - prop_vectors_3a[,i]
     
-    obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])  
-    Qbar_Inf_1_subinfect1_Abx_a_Covariates <- list_outcome_vectors_1a[[1]][,i]
-    Qbar_Inf_1_subinfect2_Abx_a_Covariates <- list_outcome_vectors_1a[[2]][,i]
+    obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]]) 
     
-    Qbar_Inf_1_subinfect1_Covariates <- list_outcome_vectors_2a[[1]][,i]
-    Qbar_Inf_1_subinfect2_Covariates <- list_outcome_vectors_2a[[2]][,i]
+    # I THINK THIS IS WRONG? WE WANT 2 AND 3 (levels 1 and 2)
+    # Qbar_Inf_1_subinfect1_Abx_a_Covariates <- list_outcome_vectors_1a[[1]][,i]
+    # Qbar_Inf_1_subinfect2_Abx_a_Covariates <- list_outcome_vectors_1a[[2]][,i]
+    
+    Qbar_Inf_1_subinfect1_Abx_a_Covariates <- list_outcome_vectors_1a[[2]][,i]
+    Qbar_Inf_1_subinfect2_Abx_a_Covariates <- list_outcome_vectors_1a[[3]][,i]
+    
+    Qbar_Inf_1_subinfect1_Covariates <- list_outcome_vectors_2a[[2]][,i]
+    Qbar_Inf_1_subinfect2_Covariates <- list_outcome_vectors_2a[[3]][,i]
     
     if(!is.null(first_id_var_name)){
       pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * length(unique(data[[first_id_var_name]])) # where length(unique(data[[first_id_var_name]])) = number of unique kids in the dataset
