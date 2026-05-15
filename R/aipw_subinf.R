@@ -165,7 +165,9 @@ aipw_sub_infection_2 <- function(data,
   
   # For each level of abx, predict setting abx = x, infection = 1 & abx = x, infection = 0
   abx_levels <- unique(data[[abx_var_name]])[!is.na(unique(data[[abx_var_name]]))]
-  subinfection_var_levels <- unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))]
+  # NOT WORKING WHEN NOT IN ORDER 0, 1, 2. ADD SORT
+  # subinfection_var_levels <- unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))]
+  subinfection_var_levels <- sort(unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))])
 
   # list for each subinfection level * abx level
   list_outcome_vectors_1a <- vector(mode = "list", length = length(subinfection_var_levels))
@@ -1023,31 +1025,32 @@ aipw_sub_infection_2 <- function(data,
 
 
 
-aipw_case_control <- function(data,
-                              laz_var_name,
-                              abx_var_name,
-                              case_var_name,
-                              subinfection_var_name,
-                              site_var_name,
-                              followup_var_names,
-                              covariate_list,
-                              severity_list,
-                              pathogen_quantity_list = NULL,
-                              outcome_type = "gaussian",
-                              sl.library.outcome.case = c("SL.glm"),
-                              sl.library.outcome.control = c("SL.glm"),
-                              sl.library.outcome.2 = c("SL.glm"),
-                              sl.library.treatment = c("SL.mean"),
-                              sl.library.infection = c("SL.glm"),
-                              sl.library.missingness.case = c("SL.glm"),
-                              sl.library.missingness.control = c("SL.glm"),
-                              v_folds = 5,
-                              return_models = FALSE,
-                              first_id_var_name = NULL,
-                              msm = FALSE,
-                              msm_var_name = NULL,
-                              msm_formula = NULL,
-                              ps_trunc_level = 0.01){
+aipw_case_control_subinf <- function(data,
+                                    laz_var_name,
+                                    abx_var_name,
+                                    case_var_name,
+                                    subinfection_var_name,
+                                    complete_subinfection = TRUE,
+                                    site_var_name,
+                                    followup_var_names,
+                                    covariate_list,
+                                    severity_list,
+                                    pathogen_quantity_list = NULL,
+                                    outcome_type = "gaussian",
+                                    sl.library.outcome.case = c("SL.glm"),
+                                    sl.library.outcome.control = c("SL.glm"),
+                                    sl.library.outcome.2 = c("SL.glm"),
+                                    sl.library.treatment = c("SL.mean"),
+                                    sl.library.infection = c("SL.glm"),
+                                    sl.library.missingness.case = c("SL.glm"),
+                                    sl.library.missingness.control = c("SL.glm"),
+                                    v_folds = 5,
+                                    return_models = FALSE,
+                                    first_id_var_name = NULL,
+                                    msm = FALSE,
+                                    msm_var_name = NULL,
+                                    msm_formula = NULL,
+                                    ps_trunc_level = 0.01){
 
   if(msm){
     stop("msm not done yet for subtype-specific case-control analysis")
@@ -1074,12 +1077,13 @@ aipw_case_control <- function(data,
   control_data_idx <- which(data[[case_var_name]] == 0)
 
   # Subinfection levels among cases only
+  # ADD SORT
   subinfection_var_levels <- unique(case_data[[subinfection_var_name]])
-  subinfection_var_levels <- subinfection_var_levels[!is.na(subinfection_var_levels)]
+  subinfection_var_levels <- sort(subinfection_var_levels[!is.na(subinfection_var_levels)])
 
-  if(length(subinfection_var_levels) != 2){
-    stop("This function currently assumes exactly two non-missing subinfection levels among cases.")
-  }
+  # if(length(subinfection_var_levels) != 2){
+  #   stop("This function currently assumes exactly two non-missing subinfection levels among cases.")
+  # }
 
   # Case data prep
   I_Y_case <- ifelse(is.na(case_data[[laz_var_name]]), 1, 0)
@@ -1158,6 +1162,7 @@ aipw_case_control <- function(data,
   outcome_vectors_1b <- data.frame(matrix(ncol = 1, nrow = nrow(data)))
   colnames(outcome_vectors_1b) <- "control"
 
+  # NOTE - as with no etiology version , i think this should only be levels 1 & 2 -- will leave looping as is until confirmed but changing downstream code
   for(s in seq_along(subinfection_var_levels)){
 
     subinfect_level <- subinfection_var_levels[s]
@@ -1172,7 +1177,7 @@ aipw_case_control <- function(data,
 
       abx_level <- abx_levels[i]
 
-      data_abx <- data
+      data_abx <- case_data
       data_abx[[abx_var_name]] <- abx_level
 
       pred_data <- data_abx[, c(
@@ -1180,16 +1185,19 @@ aipw_case_control <- function(data,
         covariate_list,
         severity_list,
         pathogen_quantity_list
-      ), drop = FALSE]
+      )]
 
       pred_data[[subinfection_var_name]] <- subinfect_level
 
       # First-stage subtype-specific case prediction
-      list_outcome_vectors_1a[[s]][, i] <- stats::predict(
+      list_outcome_vectors_1a[[s]][case_data_idx, i] <- stats::predict(
         outcome_model_1a,
         newdata = pred_data,
         type = "response"
       )$pred
+      
+      # Replace NA controls with 0
+      list_outcome_vectors_1a[[s]][,i][is.na(list_outcome_vectors_1a[[s]][,i])] <- 0
 
       # Second-stage regression onto baseline covariates among cases of this subtype
       data$set_abx_and_subinfect_outcome <- list_outcome_vectors_1a[[s]][, i]
@@ -1210,11 +1218,15 @@ aipw_case_control <- function(data,
         cvControl = list(V = v_folds)
       )
 
-      list_outcome_vectors_2a[[s]][, i] <- stats::predict(
+      list_outcome_vectors_2a[[s]][case_data_idx, i] <- stats::predict(
         outcome_model_2a,
-        newdata = data[, covariate_list, drop = FALSE],
+        newdata = case_data[, covariate_list, drop = FALSE],
         type = "response"
       )$pred
+      
+      # Replace NA controls with 0
+      list_outcome_vectors_2a[[s]][,i][is.na(list_outcome_vectors_2a[[s]][,i])] <- 0
+      
     }
   }
 
@@ -1279,7 +1291,7 @@ aipw_case_control <- function(data,
           prop_pathogen_case,
           prop_subtype_case
         ),
-        newX = data[, c(
+        newX = case_data[, c(
           covariate_list,
           severity_list,
           pathogen_quantity_list,
@@ -1293,18 +1305,21 @@ aipw_case_control <- function(data,
       tmp_pred_a <- prop_model_1a$SL.pred
 
       if(i == 1){
-        prop_vectors_1a[, i] <- tmp_pred_a
+        prop_vectors_1a[case_data_idx, i] <- tmp_pred_a
       } else{
         for(j in 1:(i - 1)){
-          tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[, j])
+          tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[case_data_idx, j])
         }
-        prop_vectors_1a[, i] <- tmp_pred_a
+        prop_vectors_1a[case_data_idx, i] <- tmp_pred_a
       }
 
     } else{
-      prop_vectors_1a[, i] <- 1 - rowSums(prop_vectors_1a[, 1:(ncol(prop_vectors_1a) - 1), drop = FALSE])
+      prop_vectors_1a[case_data_idx, i] <- 1 - rowSums(prop_vectors_1a[case_data_idx, 1:(ncol(prop_vectors_1a) - 1), drop = FALSE])
     }
   }
+  
+  # Fill controls with 0s
+  prop_vectors_1a[is.na(prop_vectors_1a)] <- 0
 
   ################################################################
   ## Part 2: Propensity models for case and subtype attribution ##
@@ -1320,23 +1335,67 @@ aipw_case_control <- function(data,
   )
 
   prop_vectors_2a[, 1] <- prop_model_2a$SL.pred
+  
+  if(complete_subinfection){
+    #ex. dysentery
+    
+    # Subtype among cases ~ baseline covariates
+    prop_model_2b_1 <- SuperLearner::SuperLearner(
+      Y = as.numeric(case_data[[subinfection_var_name]] == subinfection_var_levels[1]), #levels[1] == level 1 for case control because subinfection_var_levels is in the cases only (so no 0s)
+      X = case_data[, covariate_list, drop = FALSE],
+      newX = data[, covariate_list, drop = FALSE],
+      family = stats::binomial(),
+      SL.library = sl.library.infection,
+      cvControl = list(V = v_folds)
+    )
+    
+    P_subinfect_is_level_1_given_case <- prop_model_2b_1$SL.pred
+    P_subinfect_is_level_1_and_case <- P_subinfect_is_level_1_given_case * prop_vectors_2a[, 1]
+    
+    P_subinfect_is_level_2_given_case <- 1 - P_subinfect_is_level_1_given_case
+    P_subinfect_is_level_2_and_case <- P_subinfect_is_level_2_given_case * prop_vectors_2a[, 1]
+    
+    prop_vectors_2b$subinf_1 <- P_subinfect_is_level_1_and_case
+    prop_vectors_2b$subinf_2 <- P_subinfect_is_level_2_and_case
+  } else{
+    # ex. serotypes
+    
+    # only generalizes to 3 levels as written with *_is_level_1 and *_is_level_2
+    for(level in 1:2){
+      if(level == 1){
+        prop_model_2b_1 <- SuperLearner::SuperLearner(
+          Y = as.numeric(case_data[[subinfection_var_name]] == subinfection_var_levels[1]),
+          X = case_data[,covariate_list, drop = FALSE],
+          newX = data[,covariate_list, drop = FALSE],
+          family = stats::binomial(),
+          SL.library = sl.library.infection,
+          cvControl = list(V = v_folds)
+        )
+        
+        P_subinfect_is_level_1_given_case <- prop_model_2b_1$SL.pred
+        P_subinfect_is_level_1_and_case <- P_subinfect_is_level_1_given_case * prop_vectors_2a$case
+        
+      } else{
+        # exclude previously modeled level 
+        prop_model_2b_2 <- SuperLearner::SuperLearner(
+          Y = as.numeric(case_data[[subinfection_var_name]][case_data[[subinfection_var_name]] != subinfection_var_levels[1]] == subinfection_var_levels[2]),
+          X = case_data[which(case_data[[subinfection_var_name]] != subinfection_var_levels[1]) , covariate_list, drop = FALSE],
+          newX = data[,covariate_list, drop = FALSE],
+          family = stats::binomial(),
+          SL.library = sl.library.infection,
+          cvControl = list(V = v_folds)
+        )
+        
+        P_subinfect_is_level_2_given_case_no_level_1 <- prop_model_2b_2$SL.pred
+        P_subinfect_is_level_2_given_case <- P_subinfect_is_level_2_given_case_no_level_1 * (1 - P_subinfect_is_level_1_given_case)
+        P_subinfect_is_level_2_and_case <- P_subinfect_is_level_2_given_case * prop_vectors_2a$case
+        
+      }
 
-  # Subtype among cases ~ baseline covariates
-  prop_model_2b_1 <- SuperLearner::SuperLearner(
-    Y = as.numeric(case_data[[subinfection_var_name]] == subinfection_var_levels[1]),
-    X = case_data[, covariate_list, drop = FALSE],
-    newX = data[, covariate_list, drop = FALSE],
-    family = stats::binomial(),
-    SL.library = sl.library.infection,
-    cvControl = list(V = v_folds)
-  )
+    }
 
-  P_subinfect_is_level_1_given_case <- prop_model_2b_1$SL.pred
-  P_subinfect_is_level_1_and_case <- P_subinfect_is_level_1_given_case * prop_vectors_2a[, 1]
-
-  P_subinfect_is_level_2_given_case <- 1 - P_subinfect_is_level_1_given_case
-  P_subinfect_is_level_2_and_case <- P_subinfect_is_level_2_given_case * prop_vectors_2a[, 1]
-
+  }
+  
   prop_vectors_2b$subinf_1 <- P_subinfect_is_level_1_and_case
   prop_vectors_2b$subinf_2 <- P_subinfect_is_level_2_and_case
 
@@ -1400,10 +1459,10 @@ aipw_case_control <- function(data,
 
     abx_level <- abx_levels[i]
 
-    pred_data <- data
+    pred_data <- case_data
     pred_data[[abx_var_name]] <- abx_level
 
-    prop_vectors_3a[, i] <- stats::predict(
+    prop_vectors_3a[case_data_idx, i] <- stats::predict(
       prop_model_3a,
       newdata = pred_data[, c(
         abx_var_name,
@@ -1416,6 +1475,9 @@ aipw_case_control <- function(data,
     )$pred
   }
 
+  # fill in NAs with 0
+  prop_vectors_3a[is.na(prop_vectors_3a)] <- 0
+  
   # Control missingness predictions
   prop_vectors_3b[, 1] <- stats::predict(
     prop_model_3b,
@@ -1428,6 +1490,8 @@ aipw_case_control <- function(data,
   # -------------------------------------------------
 
   ## Plug-in estimates
+  
+  # NOTE back to 1 and 2 rather than 2 and 3 from no etiology bc cases only have 2 levels
   plug_ins_case_subinfect1 <- colMeans(list_outcome_vectors_2a[[1]][case_data_idx, , drop = FALSE])
   plug_ins_case_subinfect2 <- colMeans(list_outcome_vectors_2a[[2]][case_data_idx, , drop = FALSE])
   plug_ins_control <- mean(outcome_vectors_1b[case_data_idx, 1])
@@ -1586,8 +1650,8 @@ aipw_case_control <- function(data,
   eifs_effect_subinfect1 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
   eifs_effect_subinfect2 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
 
-  names(aipws_effect_subinfect1) <- paste0("effect_", abx_levels)
-  names(aipws_effect_subinfect2) <- paste0("effect_", abx_levels)
+  names(aipws_effect_subinfect1) <- paste0("effect_1_", abx_levels)
+  names(aipws_effect_subinfect2) <- paste0("effect_2_", abx_levels)
 
   colnames(eifs_effect_subinfect1) <- paste0("effect_subinfect1_", abx_levels)
   colnames(eifs_effect_subinfect2) <- paste0("effect_subinfect2_", abx_levels)
@@ -1646,7 +1710,7 @@ aipw_case_control <- function(data,
     se = eif_hat
   )
 
-  class(results_object) <- "aipw_case_control"
+  class(results_object) <- "aipw_case_control_subinf"
 
   return(list(
     results_object = results_object,
@@ -1701,7 +1765,7 @@ aipw_other_diarrhea <- function(data,
   sub_inf_attr <- data[inf_attr_idx, ]
 
   subinfection_var_levels <- unique(sub_inf_attr[[subinfection_var_name]])
-  subinfection_var_levels <- subinfection_var_levels[!is.na(subinfection_var_levels)]
+  subinfection_var_levels <- sort(subinfection_var_levels[!is.na(subinfection_var_levels)])
 
   if(length(subinfection_var_levels) != 2){
     stop("This function currently assumes exactly two non-missing subinfection levels among infected observations.")
