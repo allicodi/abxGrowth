@@ -275,8 +275,7 @@ aipw_other_diarrhea <- function(data,
       
       ## 1a. Propensity model for abx shigella attributable
       prop_model_1a <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
-                                                  X = data.frame(prop_covariates_inf_attr,
-                                                                 prop_pathogen_inf_attr),
+                                                  X = data.frame(prop_covariates_inf_attr),
                                                   newX = data[,c(covariate_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -287,8 +286,7 @@ aipw_other_diarrhea <- function(data,
       
       ## 1b. Propensity model for abx no attribution
       prop_model_1b <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_no_attr[[abx_var_name]] == abx_level),
-                                                  X = data.frame(prop_covariates_no_attr,
-                                                                 prop_pathogen_no_attr),
+                                                  X = data.frame(prop_covariates_no_attr),
                                                   newX = data[,c(covariate_list)], 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
@@ -1160,7 +1158,7 @@ aipw_other_diarrhea_2 <- function(data,
   
   if(sum(I_Y_no_attr) == 0){
     # no missingness; dummy model that returns 0 for all
-    prop_model_ba <- list()
+    prop_model_3b <- list()
     class(prop_model_3b) <- "constant_zero_model"
     
     predict.constant_zero_model <- function(object, newdata, ...) {
@@ -1772,7 +1770,7 @@ aipw_case_control <- function(data,
       
     } else{
       # Last prediction
-      prop_vectors_1a[case_data_idx,i] <- 1 - rowSums(prop_vectors_1a[case_data_idx,1:(ncol(prop_vectors_1a)-1)])
+      prop_vectors_1a[case_data_idx,i] <- 1 - rowSums(prop_vectors_1a[case_data_idx,1:(ncol(prop_vectors_1a)-1), drop = FALSE])
     }
     
   }

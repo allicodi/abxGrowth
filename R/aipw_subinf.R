@@ -72,6 +72,13 @@ aipw_sub_infection_2 <- function(data,
   abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
   data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
   
+  # Subinfection levels- by definition, 0 is no infection, levels 1 onward are types of subinfections
+  # Must be a numeric variable for input -- but we should treat it like a factor
+  subinfection_var_levels <- sort(unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))])
+  data[[subinfection_var_name]] <- factor(data[[subinfection_var_name]], levels = subinfection_var_levels)
+  
+  subinfection_var_levels <- factor(subinfection_var_levels, levels = subinfection_var_levels)
+  
   ## Subset 0a: subset shigella (or other infection variable) attr cases
   inf_attr_idx <- which(data[[infection_var_name]] == 1)
   sub_inf_attr <- data[inf_attr_idx,]
@@ -165,10 +172,7 @@ aipw_sub_infection_2 <- function(data,
   
   # For each level of abx, predict setting abx = x, infection = 1 & abx = x, infection = 0
   abx_levels <- unique(data[[abx_var_name]])[!is.na(unique(data[[abx_var_name]]))]
-  # NOT WORKING WHEN NOT IN ORDER 0, 1, 2. ADD SORT
-  # subinfection_var_levels <- unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))]
-  subinfection_var_levels <- sort(unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))])
-
+ 
   # list for each subinfection level * abx level
   list_outcome_vectors_1a <- vector(mode = "list", length = length(subinfection_var_levels))
   list_outcome_vectors_2a <- vector(mode = "list", length = length(subinfection_var_levels))
@@ -206,32 +210,36 @@ aipw_sub_infection_2 <- function(data,
       data_abx <- data
       data_abx[[abx_var_name]] <- abx_level
       
-      pred_data <- data_abx[, c(abx_var_name, covariate_list, severity_list, pathogen_quantity_list)]
-      pred_data[[subinfection_var_name]] <- subinfect_var_level
-      list_outcome_vectors_1a[[subinfect_ct]][, i] <- stats::predict(outcome_model_1a, newdata = pred_data, type = "response")$pred
-      
-      data$set_abx_and_subinfect_outcome <-  list_outcome_vectors_1a[[subinfect_ct]][, i]
-      
-      sub_subinfect_2b <- data[which(data[[subinfection_var_name]] == subinfect_var_level), ]
-
-      if(is.null(sl.library.outcome.2)){
-        sl.library.outcome.2 <- sl.library.outcome
-      }
-      
       # NOTE/QUESTION: I don't think this should apply to subinfection level 0 (level 0 = no shigella). Leaving looping code as is, but will only use levels 1, 2 (list idx 2, 3) downstream
       ## Model 2a: Second stage regression model, setting abx to level i and subinfection to level j
-      outcome_model_2a <- SuperLearner::SuperLearner(
-        Y = sub_subinfect_2b[['set_abx_and_subinfect_outcome']],
-        X = sub_subinfect_2b[, covariate_list, drop = FALSE],
-        family = outcome_type,
-        SL.library = sl.library.outcome.2, 
-        cvControl = list(V = v_folds)
-      )
-      
-      list_outcome_vectors_2a[[subinfect_ct]][, i] <- stats::predict(outcome_model_2a, newdata = data[, c(covariate_list)], type = "response")$pred
-      
-      if(return_models){
-        list_outcome_model_2a[[subinfect_ct]][[i]] <- outcome_model_2a
+      if(subinfect_var_level != 0){
+        pred_data <- data_abx[, c(abx_var_name, covariate_list, severity_list, pathogen_quantity_list)]
+        pred_data[[subinfection_var_name]] <- subinfect_var_level
+        
+        list_outcome_vectors_1a[[subinfect_ct]][, i] <- stats::predict(outcome_model_1a, newdata = pred_data, type = "response")$pred
+        
+        data$set_abx_and_subinfect_outcome <-  list_outcome_vectors_1a[[subinfect_ct]][, i]
+        
+        sub_subinfect_2b <- data[which(data[[subinfection_var_name]] == subinfect_var_level), ]
+        
+        if(is.null(sl.library.outcome.2)){
+          sl.library.outcome.2 <- sl.library.outcome
+        }
+        
+        outcome_model_2a <- SuperLearner::SuperLearner(
+          Y = sub_subinfect_2b[['set_abx_and_subinfect_outcome']],
+          X = sub_subinfect_2b[, covariate_list, drop = FALSE],
+          family = outcome_type,
+          SL.library = sl.library.outcome.2, 
+          cvControl = list(V = v_folds)
+        )
+        
+        list_outcome_vectors_2a[[subinfect_ct]][, i] <- stats::predict(outcome_model_2a, newdata = data[, c(covariate_list)], type = "response")$pred
+        
+        if(return_models){
+          list_outcome_model_2a[[subinfect_ct]][[i]] <- outcome_model_2a
+        }
+        
       }
 
       # Only need to do no etiology on first iteration through the outer loop (should have structured differently but leaving it)
@@ -388,23 +396,46 @@ aipw_sub_infection_2 <- function(data,
       prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list , drop = FALSE]
       prop_severity_inf_attr <- prop_sub_inf_attr[, severity_list, drop = FALSE]
       prop_pathogen_inf_attr <- prop_sub_inf_attr[, pathogen_quantity_list, drop = FALSE]
-      prop_subinfect_inf_attr <- prop_sub_inf_attr[, subinfection_var_name, drop = FALSE]
+      
+      # Need to one-hot encode subinfection variable to be able to predict on full data after fit in inf_attr
+      # prop_subinfect_inf_attr <- prop_sub_inf_attr[, subinfection_var_name, drop = FALSE]
+      prop_subinfect_inf_attr <- model.matrix(
+        ~ subinfection - 1,
+        data = data.frame(
+          subinfection = factor(
+            prop_sub_inf_attr[[subinfection_var_name]],
+            levels = subinfection_var_levels
+          )
+        )
+      )
+      
+      newX_subinfect <- model.matrix(
+        ~ subinfection - 1,
+        data = data.frame(
+          subinfection = factor(
+            data[[subinfection_var_name]],
+            levels = subinfection_var_levels
+          )
+        )
+      )
       
       prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list , drop = FALSE]
       prop_severity_no_attr <- prop_sub_no_attr[, severity_list, drop = FALSE]
       prop_pathogen_no_attr <- prop_sub_no_attr[, pathogen_quantity_list, drop = FALSE]
     
-      
       ## 1a. Propensity model for abx shigella attributable
       prop_model_1a <- SuperLearner::SuperLearner(Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
                                                   X = data.frame(prop_covariates_inf_attr,
                                                                  prop_severity_inf_attr,
                                                                  prop_pathogen_inf_attr,
                                                                  prop_subinfect_inf_attr),
-                                                  newX = data[,c(covariate_list ,
-                                                                 severity_list,
-                                                                 pathogen_quantity_list,
-                                                                 subinfection_var_name)], 
+                                                  newX = data.frame(
+                                                    data[,c(covariate_list ,
+                                                           severity_list,
+                                                                 pathogen_quantity_list), drop = FALSE],
+                                                    newX_subinfect,
+                                                    check.names = FALSE
+                                                    ), 
                                                   family = stats::binomial(), 
                                                   SL.library = sl.library.treatment,
                                                   cvControl = list(V = v_folds))
@@ -505,16 +536,18 @@ aipw_sub_infection_2 <- function(data,
     # P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
     
   } else{
-    # Ex. shigella serotypes 
+    # Ex. shigella serotypes
+    
+    subinfection_var_levels_no_0 <- subinfection_var_levels[2:(length(subinfection_var_levels)-1)]
     
     # really this only generalizes to 3 levels as written with *_is_level_1 and *_is_level_2 
-    for(level in 1:2){
+    for(level in subinfection_var_levels_no_0){
       
       # First subinfection model as is
-      if(level == 1){
+      if(level == subinfection_var_levels_no_0[1]){
         prop_model_2b_1 <- SuperLearner::SuperLearner(
           Y = as.numeric(
-            data[[subinfection_var_name]][data[[infection_var_name]] == 1] == subinfection_var_levels[2] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
+            data[[subinfection_var_name]][data[[infection_var_name]] == 1] == level # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
           ),
           X = data[data[[infection_var_name]] == 1, 
                    covariate_list , drop = FALSE], 
@@ -529,13 +562,14 @@ aipw_sub_infection_2 <- function(data,
         
       } else{
         # Exclude previously modeled level
+        data_2b_2 <- data[data[[infection_var_name]] == 1 &
+                            data[[subinfection_var_name]] != subinfection_var_levels_no_0[1], ]
         
         prop_model_2b_2 <- SuperLearner::SuperLearner(
           Y = as.numeric(
-            data[[subinfection_var_name]][data[[infection_var_name]] == 1 & data[[subinfection_var_name]] != subinfection_var_levels[2]] == subinfection_var_levels[3] # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
+            data_2b_2[[subinfection_var_name]] == level # subinfection_var_levels[2] == 1 (no dysentery, subtype1)
           ),
-          X = data[data[[infection_var_name]] == 1 & data[[subinfection_var_name]] != subinfection_var_levels[2], 
-                   covariate_list , drop = FALSE], 
+          X = data_2b_2[, covariate_list , drop = FALSE], 
           newX = data[, covariate_list, drop = FALSE],
           family = stats::binomial(),
           SL.library = sl.library.infection, 
@@ -622,12 +656,23 @@ aipw_sub_infection_2 <- function(data,
     
   } else{
     
+    # one hot encode subtype
+    subtype_inf_attr_onehot <- model.matrix(
+      ~ subinfection - 1,
+      data = data.frame(
+        subinfection = factor(
+          sub_inf_attr[[subinfection_var_name]],
+          levels = subinfection_var_levels
+        )
+      )
+    )
+    
     prop_model_3a <- SuperLearner::SuperLearner(Y = I_Y_inf_attr,
                                                 X = data.frame(abx_inf_attr,
                                                                prop_covariates_inf_attr,
                                                                severity_inf_attr,
                                                                pathogen_q_inf_attr,
-                                                               subtype_inf_attr),
+                                                               subtype_inf_attr_onehot),
                                                 family = stats::binomial(),
                                                 SL.library = sl.library.missingness,
                                                 cvControl = list(V = v_folds))
@@ -637,7 +682,7 @@ aipw_sub_infection_2 <- function(data,
   
   if(sum(I_Y_no_attr) == 0){
     # no missingness; dummy model that returns 0 for all
-    prop_model_ba <- list()
+    prop_model_3b <- list()
     class(prop_model_3b) <- "constant_zero_model"
     
     predict.constant_zero_model <- function(object, newdata, ...) {
@@ -661,11 +706,27 @@ aipw_sub_infection_2 <- function(data,
     pred_data <- data
     pred_data[[abx_var_name]] <- abx_level
     
-    prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = pred_data[,c(abx_var_name,
-                                                                                covariate_list_no_followup,
-                                                                                severity_list,
-                                                                                pathogen_quantity_list,
-                                                                                subinfection_var_name)], type = "response")$pred
+    newX_subinfect_3a <- model.matrix(
+      ~ subinfection - 1,
+      data = data.frame(
+        subinfection = factor(
+          pred_data[[subinfection_var_name]],
+          levels = subinfection_var_levels
+        )
+      )
+    )
+    
+    prop_vectors_3a[,i] <- stats::predict(prop_model_3a, newdata = data.frame(
+      pred_data[, c(
+        abx_var_name,
+        covariate_list_no_followup,
+        severity_list,
+        pathogen_quantity_list
+      ), drop = FALSE],
+      newX_subinfect_3a,
+      check.names = FALSE
+    ), type = "response")$pred
+    
     prop_vectors_3b[,i] <- stats::predict(prop_model_3b, newdata = pred_data[,c(abx_var_name,
                                                                                 covariate_list_no_followup,
                                                                                 severity_list,
@@ -1068,6 +1129,11 @@ aipw_case_control_subinf <- function(data,
   abx_levels <- levels(factor(data[[abx_var_name]]))
   abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
   data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
+  
+  # Subinfection levels- by definition, 0 is no infection, levels 1 onward are types of subinfections
+  # Must be a numeric variable for input -- but we should treat it like a factor
+  # subinfection_var_levels <- sort(unique(data[[subinfection_var_name]])[!is.na(unique(data[[subinfection_var_name]]))])
+  # data[[subinfection_var_name]] <- factor(data[[subinfection_var_name]], levels = subinfection_var_levels)
 
   # Get case vs control data
   case_data <- data[data[[case_var_name]] == 1, ]
@@ -1076,10 +1142,10 @@ aipw_case_control_subinf <- function(data,
   case_data_idx <- which(data[[case_var_name]] == 1)
   control_data_idx <- which(data[[case_var_name]] == 0)
 
-  # Subinfection levels among cases only
-  # ADD SORT
-  subinfection_var_levels <- unique(case_data[[subinfection_var_name]])
-  subinfection_var_levels <- sort(subinfection_var_levels[!is.na(subinfection_var_levels)])
+  # Subinfection levels among cases only -- note this should not include 0
+  subinfection_var_levels <- sort(unique(case_data[[subinfection_var_name]][!is.na(case_data[[subinfection_var_name]])]))
+  case_data[[subinfection_var_name]] <- factor(case_data[[subinfection_var_name]], levels = subinfection_var_levels)
+  subinfection_var_levels <- factor(subinfection_var_levels, levels = subinfection_var_levels)
 
   # if(length(subinfection_var_levels) != 2){
   #   stop("This function currently assumes exactly two non-missing subinfection levels among cases.")
@@ -1198,18 +1264,19 @@ aipw_case_control_subinf <- function(data,
       
       # Replace NA controls with 0
       list_outcome_vectors_1a[[s]][,i][is.na(list_outcome_vectors_1a[[s]][,i])] <- 0
-
+      
+      
       # Second-stage regression onto baseline covariates among cases of this subtype
       data$set_abx_and_subinfect_outcome <- list_outcome_vectors_1a[[s]][, i]
-
+      
       sub_subinfect_2a <- data[
         data[[case_var_name]] == 1 & data[[subinfection_var_name]] == subinfect_level,
       ]
-
+      
       if(is.null(sl.library.outcome.2)){
         sl.library.outcome.2 <- sl.library.outcome.case
       }
-
+      
       outcome_model_2a <- SuperLearner::SuperLearner(
         Y = sub_subinfect_2a[["set_abx_and_subinfect_outcome"]],
         X = sub_subinfect_2a[, covariate_list, drop = FALSE],
@@ -1217,7 +1284,7 @@ aipw_case_control_subinf <- function(data,
         SL.library = sl.library.outcome.2,
         cvControl = list(V = v_folds)
       )
-
+      
       list_outcome_vectors_2a[[s]][case_data_idx, i] <- stats::predict(
         outcome_model_2a,
         newdata = case_data[, covariate_list, drop = FALSE],
@@ -1226,7 +1293,7 @@ aipw_case_control_subinf <- function(data,
       
       # Replace NA controls with 0
       list_outcome_vectors_2a[[s]][,i][is.na(list_outcome_vectors_2a[[s]][,i])] <- 0
-      
+
     }
   }
 
@@ -1281,6 +1348,27 @@ aipw_case_control_subinf <- function(data,
       prop_severity_case <- prop_sub_case[, severity_list, drop = FALSE]
       prop_pathogen_case <- prop_sub_case[, pathogen_quantity_list, drop = FALSE]
       prop_subtype_case <- prop_sub_case[, subinfection_var_name, drop = FALSE]
+      
+      prop_subtype_case <- model.matrix(
+        ~ subinfection - 1,
+        data = data.frame(
+          subinfection = factor(
+            prop_sub_case[[subinfection_var_name]],
+            levels = subinfection_var_levels
+          )
+        )
+      )
+      
+      newX_subtype_case <- model.matrix(
+        ~ subinfection - 1,
+        data = data.frame(
+          subinfection = factor(
+            case_data[[subinfection_var_name]],
+            levels = subinfection_var_levels
+          )
+        )
+      )
+      
 
       ## Antibiotic propensity among cases, conditioning on subtype
       prop_model_1a <- SuperLearner::SuperLearner(
@@ -1289,18 +1377,23 @@ aipw_case_control_subinf <- function(data,
           prop_covariates_case,
           prop_severity_case,
           prop_pathogen_case,
-          prop_subtype_case
+          prop_subtype_case,
+          check.names = FALSE
         ),
-        newX = case_data[, c(
-          covariate_list,
-          severity_list,
-          pathogen_quantity_list,
-          subinfection_var_name
-        ), drop = FALSE],
+        newX = data.frame(
+          case_data[, c(
+            covariate_list,
+            severity_list,
+            pathogen_quantity_list
+          ), drop = FALSE],
+          newX_subtype_case,
+          check.names = FALSE
+        ),
         family = stats::binomial(),
         SL.library = sl.library.treatment,
         cvControl = list(V = v_folds)
       )
+      
 
       tmp_pred_a <- prop_model_1a$SL.pred
 
@@ -1338,6 +1431,7 @@ aipw_case_control_subinf <- function(data,
   
   if(complete_subinfection){
     #ex. dysentery
+    
     
     # Subtype among cases ~ baseline covariates
     prop_model_2b_1 <- SuperLearner::SuperLearner(
@@ -1377,10 +1471,13 @@ aipw_case_control_subinf <- function(data,
         
       } else{
         # exclude previously modeled level 
+        
+        data_2b_2 <- case_data[which(case_data[[subinfection_var_name]] != subinfection_var_levels[1]),]
+        
         prop_model_2b_2 <- SuperLearner::SuperLearner(
-          Y = as.numeric(case_data[[subinfection_var_name]][case_data[[subinfection_var_name]] != subinfection_var_levels[1]] == subinfection_var_levels[2]),
-          X = case_data[which(case_data[[subinfection_var_name]] != subinfection_var_levels[1]) , covariate_list, drop = FALSE],
-          newX = data[,covariate_list, drop = FALSE],
+          Y = as.numeric(data_2b_2[[subinfection_var_name]] == subinfection_var_levels[2]),
+          X = data_2b_2[ , covariate_list, drop = FALSE],
+          newX = data[, covariate_list, drop = FALSE],
           family = stats::binomial(),
           SL.library = sl.library.infection,
           cvControl = list(V = v_folds)
@@ -1402,22 +1499,32 @@ aipw_case_control_subinf <- function(data,
   ###############################################
   ## Part 3: Propensity models for missingness ##
   ###############################################
-
+  
   covariates_case_no_followup <- case_data[, covariate_list_no_followup, drop = FALSE]
   covariates_control_no_followup <- control_data[, covariate_list_no_followup, drop = FALSE]
-
+  
+  subtype_case_oh <- model.matrix(
+    ~ subinfection - 1,
+    data = data.frame(
+      subinfection = factor(
+        case_data[[subinfection_var_name]],
+        levels = subinfection_var_levels
+      )
+    )
+  )
+  
   ## Missingness model in cases
   if(sum(I_Y_case) == 0){
-
+    
     prop_model_3a <- list()
     class(prop_model_3a) <- "constant_zero_model"
-
+    
     predict.constant_zero_model <- function(object, newdata, ...) {
       list(pred = rep(0, nrow(newdata)))
     }
-
+    
   } else{
-
+    
     prop_model_3a <- SuperLearner::SuperLearner(
       Y = I_Y_case,
       X = data.frame(
@@ -1425,7 +1532,8 @@ aipw_case_control_subinf <- function(data,
         covariates_case_no_followup,
         severity_case,
         pathogen_q_case,
-        subtype_case
+        subtype_case_oh,
+        check.names = FALSE
       ),
       family = stats::binomial(),
       SL.library = sl.library.missingness.case,
@@ -1456,25 +1564,38 @@ aipw_case_control_subinf <- function(data,
 
   # Predict case missingness setting each antibiotic level
   for(i in seq_along(abx_levels)){
-
+    
     abx_level <- abx_levels[i]
-
+    
     pred_data <- case_data
     pred_data[[abx_var_name]] <- abx_level
-
+    
+    newX_subtype_case_3a <- model.matrix(
+      ~ subinfection - 1,
+      data = data.frame(
+        subinfection = factor(
+          pred_data[[subinfection_var_name]],
+          levels = subinfection_var_levels
+        )
+      )
+    )
+    
     prop_vectors_3a[case_data_idx, i] <- stats::predict(
       prop_model_3a,
-      newdata = pred_data[, c(
-        abx_var_name,
-        covariate_list_no_followup,
-        severity_list,
-        pathogen_quantity_list,
-        subinfection_var_name
-      ), drop = FALSE],
+      newdata = data.frame(
+        pred_data[, c(
+          abx_var_name,
+          covariate_list_no_followup,
+          severity_list,
+          pathogen_quantity_list
+        ), drop = FALSE],
+        newX_subtype_case_3a,
+        check.names = FALSE
+      ),
       type = "response"
     )$pred
   }
-
+  
   # fill in NAs with 0
   prop_vectors_3a[is.na(prop_vectors_3a)] <- 0
   
@@ -1718,642 +1839,642 @@ aipw_case_control_subinf <- function(data,
   ))
 }
 
-
-
-aipw_other_diarrhea <- function(data,
-                                laz_var_name,
-                                abx_var_name,
-                                infection_var_name,
-                                subinfection_var_name,
-                                site_var_name,
-                                followup_var_names,
-                                covariate_list,
-                                pathogen_quantity_list = NULL,
-                                pathogen_attributable_list = NULL,
-                                no_etiology_var_name = NULL,
-                                outcome_type = "gaussian",
-                                sl.library.outcome = c("SL.glm"),
-                                sl.library.treatment = c("SL.mean"),
-                                sl.library.infection = c("SL.glm"),
-                                sl.library.missingness = c("SL.glm"),
-                                v_folds = 5,
-                                return_models = FALSE,
-                                first_id_var_name = NULL,
-                                msm = FALSE,
-                                msm_var_name = NULL,
-                                msm_formula = NULL,
-                                ps_trunc_level = 0.01,
-                                all_other_diarrhea = FALSE){
-
-  if(msm){
-    stop("msm not done yet for subtype-specific aipw_other_diarrhea")
-  }
-
-  if(return_models){
-    stop("return_models not done yet for subtype-specific aipw_other_diarrhea")
-  }
-
-  # ------------------------------------------------------------
-  # STEP 0: Create subsets of data for model fitting
-  # ------------------------------------------------------------
-
-  abx_levels <- levels(factor(data[[abx_var_name]]))
-  abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
-  data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
-
-  inf_attr_idx <- which(data[[infection_var_name]] == 1)
-  sub_inf_attr <- data[inf_attr_idx, ]
-
-  subinfection_var_levels <- unique(sub_inf_attr[[subinfection_var_name]])
-  subinfection_var_levels <- sort(subinfection_var_levels[!is.na(subinfection_var_levels)])
-
-  if(length(subinfection_var_levels) != 2){
-    stop("This function currently assumes exactly two non-missing subinfection levels among infected observations.")
-  }
-
-  I_Y_inf_attr <- ifelse(is.na(sub_inf_attr[[laz_var_name]]), 1, 0)
-  Y_inf_attr <- sub_inf_attr[[laz_var_name]]
-  attributes(Y_inf_attr) <- NULL
-
-  covariates_inf_attr <- sub_inf_attr[, covariate_list, drop = FALSE]
-  abx_inf_attr <- sub_inf_attr[, abx_var_name, drop = FALSE]
-  subtype_inf_attr <- sub_inf_attr[, subinfection_var_name, drop = FALSE]
-
-  sub_inf_attr_complete <- sub_inf_attr[!is.na(sub_inf_attr[[laz_var_name]]), ]
-
-  Y_inf_attr_complete <- sub_inf_attr_complete[[laz_var_name]]
-  attributes(Y_inf_attr_complete) <- NULL
-
-  covariates_inf_attr_complete <- sub_inf_attr_complete[, covariate_list, drop = FALSE]
-  abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
-  subtype_inf_attr_complete <- sub_inf_attr_complete[, subinfection_var_name, drop = FALSE]
-
-  if(!is.null(no_etiology_var_name)){
-    sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1), ]
-  } else{
-    I_no_attr <- ifelse(
-      data[[infection_var_name]] == 0 &
-        rowSums(data[, pathogen_attributable_list, drop = FALSE], na.rm = TRUE) == 0,
-      1, 0
-    )
-    data$no_etiology <- I_no_attr
-    no_etiology_var_name <- "no_etiology"
-
-    sub_no_attr <- data[which(data$no_etiology == 1), ]
-  }
-
-  I_Y_no_attr <- ifelse(is.na(sub_no_attr[[laz_var_name]]), 1, 0)
-  Y_no_attr <- sub_no_attr[[laz_var_name]]
-  attributes(Y_no_attr) <- NULL
-
-  covariates_no_attr <- sub_no_attr[, covariate_list, drop = FALSE]
-  abx_no_attr <- sub_no_attr[, abx_var_name, drop = FALSE]
-
-  sub_no_attr_complete <- sub_no_attr[!is.na(sub_no_attr[[laz_var_name]]), ]
-
-  Y_no_attr_complete <- sub_no_attr_complete[[laz_var_name]]
-  attributes(Y_no_attr_complete) <- NULL
-
-  covariates_no_attr_complete <- sub_no_attr_complete[, covariate_list, drop = FALSE]
-  abx_no_attr_complete <- sub_no_attr_complete[, abx_var_name, drop = FALSE]
-
-  # ------------------------------------------------------------
-  # STEP 1: Fit & predict from outcome models
-  # ------------------------------------------------------------
-
-  outcome_model_1a <- SuperLearner::SuperLearner(
-    Y = Y_inf_attr_complete,
-    X = data.frame(
-      abx_inf_attr_complete,
-      covariates_inf_attr_complete,
-      subtype_inf_attr_complete
-    ),
-    family = outcome_type,
-    SL.library = sl.library.outcome,
-    cvControl = list(V = v_folds)
-  )
-
-  outcome_model_1b <- SuperLearner::SuperLearner(
-    Y = Y_no_attr_complete,
-    X = data.frame(
-      abx_no_attr_complete,
-      covariates_no_attr_complete
-    ),
-    family = outcome_type,
-    SL.library = sl.library.outcome,
-    cvControl = list(V = v_folds)
-  )
-
-  abx_levels <- unique(data[[abx_var_name]])
-  abx_levels <- abx_levels[!is.na(abx_levels)]
-
-  list_outcome_vectors_1a <- vector("list", length = length(subinfection_var_levels))
-  outcome_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-
-  colnames(outcome_vectors_1b) <- paste0("abx_", abx_levels)
-
-  for(s in seq_along(subinfection_var_levels)){
-
-    subinfect_level <- subinfection_var_levels[s]
-
-    list_outcome_vectors_1a[[s]] <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-    colnames(list_outcome_vectors_1a[[s]]) <- paste0("abx_", abx_levels)
-
-    for(i in seq_along(abx_levels)){
-
-      abx_level <- abx_levels[i]
-
-      data_abx <- data
-      data_abx[[abx_var_name]] <- abx_level
-
-      pred_data <- data_abx[, c(abx_var_name, covariate_list), drop = FALSE]
-      pred_data[[subinfection_var_name]] <- subinfect_level
-
-      list_outcome_vectors_1a[[s]][, i] <- stats::predict(
-        outcome_model_1a,
-        newdata = pred_data,
-        type = "response"
-      )$pred
-    }
-  }
-
-  for(i in seq_along(abx_levels)){
-
-    abx_level <- abx_levels[i]
-
-    data_abx <- data
-    data_abx[[abx_var_name]] <- abx_level
-
-    outcome_vectors_1b[, i] <- stats::predict(
-      outcome_model_1b,
-      newdata = data_abx[, c(abx_var_name, covariate_list), drop = FALSE],
-      type = "response"
-    )$pred
-  }
-
-  # ------------------------------------------------------------
-  # STEP 2: Fit & predict from propensity models
-  # ------------------------------------------------------------
-
-  if(!any(is.na(followup_var_names))){
-    covariate_list_no_followup <- covariate_list[!(covariate_list %in% followup_var_names)]
-  } else{
-    covariate_list_no_followup <- covariate_list
-  }
-
-  prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-  prop_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-  prop_vectors_2a <- data.frame(matrix(ncol = 2, nrow = nrow(data)))
-  prop_vectors_2b <- data.frame(matrix(ncol = 2, nrow = nrow(data)))
-  prop_vectors_3a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-  prop_vectors_3b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-
-  colnames(prop_vectors_1a) <- paste0("abx_", abx_levels)
-  colnames(prop_vectors_1b) <- paste0("abx_", abx_levels)
-  colnames(prop_vectors_2a) <- c("inf_attr", "no_attr")
-  colnames(prop_vectors_2b) <- c("subinf_1", "subinf_2")
-  colnames(prop_vectors_3a) <- paste0("abx_", abx_levels)
-  colnames(prop_vectors_3b) <- paste0("abx_", abx_levels)
-
-  ###############################################
-  ## Part 1: Propensity models for antibiotics ##
-  ###############################################
-
-  for(i in seq_along(abx_levels)){
-
-    abx_level <- abx_levels[i]
-
-    if(i != length(abx_levels)){
-
-      if(i > 1){
-        abx_levels_out <- abx_levels[1:(i - 1)]
-        prop_sub_inf_attr <- sub_inf_attr[-which(sub_inf_attr[[abx_var_name]] %in% abx_levels_out), ]
-        prop_sub_no_attr <- sub_no_attr[-which(sub_no_attr[[abx_var_name]] %in% abx_levels_out), ]
-      } else{
-        prop_sub_inf_attr <- sub_inf_attr
-        prop_sub_no_attr <- sub_no_attr
-      }
-
-      prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list, drop = FALSE]
-      prop_subtype_inf_attr <- prop_sub_inf_attr[, subinfection_var_name, drop = FALSE]
-
-      prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list, drop = FALSE]
-
-      prop_model_1a <- SuperLearner::SuperLearner(
-        Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
-        X = data.frame(
-          prop_covariates_inf_attr,
-          prop_subtype_inf_attr
-        ),
-        newX = data[, c(covariate_list, subinfection_var_name), drop = FALSE],
-        family = stats::binomial(),
-        SL.library = sl.library.treatment,
-        cvControl = list(V = v_folds)
-      )
-
-      tmp_pred_a <- prop_model_1a$SL.pred
-
-      prop_model_1b <- SuperLearner::SuperLearner(
-        Y = as.numeric(prop_sub_no_attr[[abx_var_name]] == abx_level),
-        X = data.frame(prop_covariates_no_attr),
-        newX = data[, covariate_list, drop = FALSE],
-        family = stats::binomial(),
-        SL.library = sl.library.treatment,
-        cvControl = list(V = v_folds)
-      )
-
-      tmp_pred_b <- prop_model_1b$SL.pred
-
-      if(i == 1){
-        prop_vectors_1a[, i] <- tmp_pred_a
-        prop_vectors_1b[, i] <- tmp_pred_b
-      } else{
-        for(j in 1:(i - 1)){
-          tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[, j])
-          tmp_pred_b <- tmp_pred_b * (1 - prop_vectors_1b[, j])
-        }
-        prop_vectors_1a[, i] <- tmp_pred_a
-        prop_vectors_1b[, i] <- tmp_pred_b
-      }
-
-    } else{
-      prop_vectors_1a[, i] <- 1 - rowSums(prop_vectors_1a[, 1:(ncol(prop_vectors_1a) - 1), drop = FALSE])
-      prop_vectors_1b[, i] <- 1 - rowSums(prop_vectors_1b[, 1:(ncol(prop_vectors_1b) - 1), drop = FALSE])
-    }
-  }
-
-  ##########################################################
-  ## Part 2: Propensity models for infection and subtype ##
-  ##########################################################
-
-  prop_model_2a_1 <- SuperLearner::SuperLearner(
-    Y = data[[infection_var_name]],
-    X = data[, covariate_list, drop = FALSE],
-    family = stats::binomial(),
-    SL.library = sl.library.infection,
-    cvControl = list(V = v_folds)
-  )
-
-  prop_vectors_2a$inf_attr <- prop_model_2a_1$SL.pred
-
-  prop_model_2b_1 <- SuperLearner::SuperLearner(
-    Y = as.numeric(sub_inf_attr[[subinfection_var_name]] == subinfection_var_levels[1]),
-    X = sub_inf_attr[, covariate_list, drop = FALSE],
-    newX = data[, covariate_list, drop = FALSE],
-    family = stats::binomial(),
-    SL.library = sl.library.infection,
-    cvControl = list(V = v_folds)
-  )
-
-  P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
-  P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
-
-  P_subinfect_is_level_2_given_attr <- 1 - P_subinfect_is_level_1_given_attr
-  P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
-
-  prop_vectors_2b$subinf_1 <- P_subinfect_is_level_1_and_attr
-  prop_vectors_2b$subinf_2 <- P_subinfect_is_level_2_and_attr
-
-  sub_no_shig <- data[which(data[[infection_var_name]] == 0), ]
-
-  if(is.na(no_etiology_var_name)){
-    sub_no_shig$no_etiology <- ifelse(
-      rowSums(sub_no_shig[, pathogen_attributable_list, drop = FALSE], na.rm = TRUE) == 0,
-      1, 0
-    )
-    no_etiology_var_name <- "no_etiology"
-  }
-
-  if(!all_other_diarrhea){
-
-    prop_model_2a_2 <- SuperLearner::SuperLearner(
-      Y = sub_no_shig[[no_etiology_var_name]],
-      X = sub_no_shig[, covariate_list, drop = FALSE],
-      newX = data[, covariate_list, drop = FALSE],
-      family = stats::binomial(),
-      SL.library = sl.library.infection,
-      cvControl = list(V = v_folds)
-    )
-
-    prop_vectors_2a$no_attr <- prop_model_2a_2$SL.pred * (1 - prop_vectors_2a$inf_attr)
-
-  } else{
-
-    prop_model_2a_2 <- NULL
-    prop_vectors_2a$no_attr <- 1 - prop_vectors_2a$inf_attr
-  }
-
-  ###############################################
-  ## Part 3: Propensity models for missingness ##
-  ###############################################
-
-  prop_covariates_inf_attr <- covariates_inf_attr[
-    , colnames(covariates_inf_attr) %in% covariate_list_no_followup,
-    drop = FALSE
-  ]
-
-  prop_covariates_no_attr <- covariates_no_attr[
-    , colnames(covariates_no_attr) %in% covariate_list_no_followup,
-    drop = FALSE
-  ]
-
-  if(sum(I_Y_inf_attr) == 0){
-
-    prop_model_3a <- list()
-    class(prop_model_3a) <- "constant_zero_model"
-
-    predict.constant_zero_model <- function(object, newdata, ...) {
-      list(pred = rep(0, nrow(newdata)))
-    }
-
-  } else{
-
-    prop_model_3a <- SuperLearner::SuperLearner(
-      Y = I_Y_inf_attr,
-      X = data.frame(
-        abx_inf_attr,
-        prop_covariates_inf_attr,
-        subtype_inf_attr
-      ),
-      family = stats::binomial(),
-      SL.library = sl.library.missingness,
-      cvControl = list(V = v_folds)
-    )
-  }
-
-  if(sum(I_Y_no_attr) == 0){
-
-    prop_model_3b <- list()
-    class(prop_model_3b) <- "constant_zero_model"
-
-    predict.constant_zero_model <- function(object, newdata, ...) {
-      list(pred = rep(0, nrow(newdata)))
-    }
-
-  } else{
-
-    prop_model_3b <- SuperLearner::SuperLearner(
-      Y = I_Y_no_attr,
-      X = data.frame(
-        abx_no_attr,
-        prop_covariates_no_attr
-      ),
-      family = stats::binomial(),
-      SL.library = sl.library.missingness,
-      cvControl = list(V = v_folds)
-    )
-  }
-
-  for(i in seq_along(abx_levels)){
-
-    abx_level <- abx_levels[i]
-
-    pred_data <- data
-    pred_data[[abx_var_name]] <- abx_level
-
-    prop_vectors_3a[, i] <- stats::predict(
-      prop_model_3a,
-      newdata = pred_data[, c(
-        abx_var_name,
-        covariate_list_no_followup,
-        subinfection_var_name
-      ), drop = FALSE],
-      type = "response"
-    )$pred
-
-    prop_vectors_3b[, i] <- stats::predict(
-      prop_model_3b,
-      newdata = pred_data[, c(
-        abx_var_name,
-        covariate_list_no_followup
-      ), drop = FALSE],
-      type = "response"
-    )$pred
-  }
-
-  # -------------------------------------------------
-  # STEP 3: AIPW estimates and confidence intervals
-  # -------------------------------------------------
-
-  plug_ins_inf_subinfect1 <- colMeans(list_outcome_vectors_1a[[1]][inf_attr_idx, , drop = FALSE])
-  plug_ins_inf_subinfect2 <- colMeans(list_outcome_vectors_1a[[2]][inf_attr_idx, , drop = FALSE])
-  plug_ins_no_attr <- colMeans(outcome_vectors_1b[inf_attr_idx, , drop = FALSE])
-
-  inf_subinfect1_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-  inf_subinfect2_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-  no_attr_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
-
-  colnames(inf_subinfect1_eifs) <- paste0("inf_subinfect1_eif_", abx_levels)
-  colnames(inf_subinfect2_eifs) <- paste0("inf_subinfect2_eif_", abx_levels)
-  colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
-
-  if(!is.na(ps_trunc_level)){
-
-    truncate_ps <- function(mat, ps_trunc_level){
-      mat[mat < ps_trunc_level] <- ps_trunc_level
-      mat[mat > 1 - ps_trunc_level] <- 1 - ps_trunc_level
-      return(mat)
-    }
-
-    prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
-    prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
-    prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
-    prop_vectors_2b <- truncate_ps(prop_vectors_2b, ps_trunc_level)
-    prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
-    prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
-  }
-
-  I_Inf_1 <- data[[infection_var_name]]
-  P_Inf_1 <- mean(prop_vectors_2a[, 1])
-  P_Inf_1__Covariates <- prop_vectors_2a[, 1]
-
-  I_Inf_subinfect1_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[1])
-  I_Inf_subinfect2_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[2])
-
-  P_Inf_subinfect1_1 <- prop_vectors_2b$subinf_1
-  P_Inf_subinfect2_1 <- prop_vectors_2b$subinf_2
-
-  I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
-  obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])
-
-  for(i in seq_along(abx_levels)){
-
-    abx_level <- abx_levels[i]
-
-    I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
-    P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[, i]
-
-    P_Delta_0__Inf_all <- 1 - prop_vectors_3a[, i]
-
-    if(!is.null(first_id_var_name)){
-      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * length(unique(data[[first_id_var_name]]))
-    } else{
-      pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * nrow(data)
-    }
-
-    truncate_factor <- 5 / (sqrt(pseudo_n) * log(pseudo_n))
-
-    full_propensity <- P_Abx_a__Inf_1_Covariates * P_Delta_0__Inf_all
-    full_propensity[full_propensity < truncate_factor] <- truncate_factor
-
-    P_Inf_subinfect1_tmp <- P_Inf_subinfect1_1
-    P_Inf_subinfect2_tmp <- P_Inf_subinfect2_1
-
-    P_Inf_subinfect1_tmp[P_Inf_subinfect1_tmp < truncate_factor] <- truncate_factor
-    P_Inf_subinfect2_tmp[P_Inf_subinfect2_tmp < truncate_factor] <- truncate_factor
-
-    Qbar_Inf_1_subinfect1_Abx_a_Covariates <- list_outcome_vectors_1a[[1]][, i]
-    Qbar_Inf_1_subinfect2_Abx_a_Covariates <- list_outcome_vectors_1a[[2]][, i]
-
-    eif_vec_inf_subinfect1 <-
-      (I_Inf_subinfect1_1 / P_Inf_subinfect1_tmp) *
-      (P_Inf_1__Covariates / P_Inf_1) *
-      (I_Abx_a * I_Delta_0) / full_propensity *
-      (obs_outcome - Qbar_Inf_1_subinfect1_Abx_a_Covariates) +
-      (I_Inf_1 / P_Inf_1) *
-      (Qbar_Inf_1_subinfect1_Abx_a_Covariates - plug_ins_inf_subinfect1[i])
-
-    eif_vec_inf_subinfect2 <-
-      (I_Inf_subinfect2_1 / P_Inf_subinfect2_tmp) *
-      (P_Inf_1__Covariates / P_Inf_1) *
-      (I_Abx_a * I_Delta_0) / full_propensity *
-      (obs_outcome - Qbar_Inf_1_subinfect2_Abx_a_Covariates) +
-      (I_Inf_1 / P_Inf_1) *
-      (Qbar_Inf_1_subinfect2_Abx_a_Covariates - plug_ins_inf_subinfect2[i])
-
-    if(is.na(no_etiology_var_name)){
-      I_No_attr_1 <- data$no_etiology
-    } else{
-      I_No_attr_1 <- data[[no_etiology_var_name]]
-    }
-
-    P_No_attr__Covariates <- prop_vectors_2a[, 2]
-    P_Abx_a__Covariates <- prop_vectors_1b[, i]
-    P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[, i]
-
-    Qbar_No_attr_Abx_a_Covariates <- outcome_vectors_1b[, i]
-
-    if(!is.null(first_id_var_name)){
-      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * length(unique(data[[first_id_var_name]]))
-    } else{
-      pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * nrow(data)
-    }
-
-    truncate_factor <- 5 / (sqrt(pseudo_n) * log(pseudo_n))
-
-    full_propensity <- P_Abx_a__Covariates * P_Delta_0__No_attr_all
-    full_propensity[full_propensity < truncate_factor] <- truncate_factor
-
-    P_No_attr_tmp <- P_No_attr__Covariates
-    P_No_attr_tmp[P_No_attr_tmp < truncate_factor] <- truncate_factor
-
-    eif_vec_no_attr <-
-      (I_No_attr_1 / P_No_attr_tmp) *
-      (P_Inf_1__Covariates / P_Inf_1) *
-      (I_Abx_a * I_Delta_0) / full_propensity *
-      (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
-      (I_Inf_1 / P_Inf_1) *
-      (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i])
-
-    inf_subinfect1_eifs[, i] <- eif_vec_inf_subinfect1
-    inf_subinfect2_eifs[, i] <- eif_vec_inf_subinfect2
-    no_attr_eifs[, i] <- eif_vec_no_attr
-  }
-
-  aipw_inf_subinfect1 <- plug_ins_inf_subinfect1 + colMeans(inf_subinfect1_eifs)
-  aipw_inf_subinfect2 <- plug_ins_inf_subinfect2 + colMeans(inf_subinfect2_eifs)
-  aipw_no_attr <- plug_ins_no_attr + colMeans(no_attr_eifs)
-
-  eif_matrix <- cbind(inf_subinfect1_eifs, inf_subinfect2_eifs, no_attr_eifs)
-
-  if(!is.null(first_id_var_name)){
-
-    first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
-    first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
-
-    colnames(first_id_eif_matrix)[-1] <- colnames(eif_matrix)
-
-    eif_first_ids <- first_id_eif_matrix[, 1]
-
-    scaled_matrix <- first_id_eif_matrix[, -1, drop = FALSE] *
-      (nrow(first_id_eif_matrix) / nrow(eif_matrix))
-
-  } else{
-
-    eif_first_ids <- NULL
-    scaled_matrix <- eif_matrix
-  }
-
-  aipws_effect_subinfect1 <- vector("numeric", length = length(abx_levels))
-  aipws_effect_subinfect2 <- vector("numeric", length = length(abx_levels))
-
-  eifs_effect_subinfect1 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
-  eifs_effect_subinfect2 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
-
-  names(aipws_effect_subinfect1) <- paste0("effect_", abx_levels)
-  names(aipws_effect_subinfect2) <- paste0("effect_", abx_levels)
-
-  colnames(eifs_effect_subinfect1) <- paste0("effect_subinfect1_", abx_levels)
-  colnames(eifs_effect_subinfect2) <- paste0("effect_subinfect2_", abx_levels)
-
-  for(i in seq_along(abx_levels)){
-
-    aipws_effect_subinfect1[i] <- aipw_inf_subinfect1[i] - aipw_no_attr[i]
-    aipws_effect_subinfect2[i] <- aipw_inf_subinfect2[i] - aipw_no_attr[i]
-
-    idx_1_subinfect1 <- i
-    idx_1_subinfect2 <- length(abx_levels) + i
-    idx_2 <- 2 * length(abx_levels) + i
-
-    gradient_subinfect1 <- rep(0, 3 * length(abx_levels))
-    gradient_subinfect1[idx_1_subinfect1] <- 1
-    gradient_subinfect1[idx_2] <- -1
-    gradient_subinfect1 <- matrix(gradient_subinfect1, ncol = 1)
-
-    gradient_subinfect2 <- rep(0, 3 * length(abx_levels))
-    gradient_subinfect2[idx_1_subinfect2] <- 1
-    gradient_subinfect2[idx_2] <- -1
-    gradient_subinfect2 <- matrix(gradient_subinfect2, ncol = 1)
-
-    eif_effect_subinfect1 <- as.numeric(as.matrix(scaled_matrix) %*% gradient_subinfect1)
-    eifs_effect_subinfect1[, i] <- eif_effect_subinfect1
-
-    eif_effect_subinfect2 <- as.numeric(as.matrix(scaled_matrix) %*% gradient_subinfect2)
-    eifs_effect_subinfect2[, i] <- eif_effect_subinfect2
-  }
-
-  results_df <- data.frame(
-    abx_levels = abx_levels,
-    abx_level_inf_subinfect1_1 = aipw_inf_subinfect1,
-    abx_level_inf_subinfect2_1 = aipw_inf_subinfect2,
-    abx_level_inf_0 = aipw_no_attr,
-    effect_inf_subinfect1_abx_level = aipws_effect_subinfect1,
-    effect_inf_subinfect2_abx_level = aipws_effect_subinfect2
-  )
-
-  eif_matrix_scaled <- cbind(
-    scaled_matrix,
-    eifs_effect_subinfect1,
-    eifs_effect_subinfect2
-  )
-
-  cov_matrix <- stats::cov(eif_matrix_scaled)
-  eif_hat <- sqrt(diag(cov_matrix) / nrow(eif_matrix_scaled))
-
-  results_object <- list(
-    results_df = results_df,
-    plug_ins_inf_subinfect1 = plug_ins_inf_subinfect1,
-    plug_ins_inf_subinfect2 = plug_ins_inf_subinfect2,
-    plug_ins_no_attr = plug_ins_no_attr,
-    eif_matrix = eif_matrix_scaled,
-    eif_first_ids = eif_first_ids,
-    se = eif_hat
-  )
-
-  class(results_object) <- "aipw_other_diarrhea"
-
-  return(list(
-    results_object = results_object,
-    aipw_models = NULL
-  ))
-}
+# 
+# 
+# aipw_other_diarrhea <- function(data,
+#                                 laz_var_name,
+#                                 abx_var_name,
+#                                 infection_var_name,
+#                                 subinfection_var_name,
+#                                 site_var_name,
+#                                 followup_var_names,
+#                                 covariate_list,
+#                                 pathogen_quantity_list = NULL,
+#                                 pathogen_attributable_list = NULL,
+#                                 no_etiology_var_name = NULL,
+#                                 outcome_type = "gaussian",
+#                                 sl.library.outcome = c("SL.glm"),
+#                                 sl.library.treatment = c("SL.mean"),
+#                                 sl.library.infection = c("SL.glm"),
+#                                 sl.library.missingness = c("SL.glm"),
+#                                 v_folds = 5,
+#                                 return_models = FALSE,
+#                                 first_id_var_name = NULL,
+#                                 msm = FALSE,
+#                                 msm_var_name = NULL,
+#                                 msm_formula = NULL,
+#                                 ps_trunc_level = 0.01,
+#                                 all_other_diarrhea = FALSE){
+# 
+#   if(msm){
+#     stop("msm not done yet for subtype-specific aipw_other_diarrhea")
+#   }
+# 
+#   if(return_models){
+#     stop("return_models not done yet for subtype-specific aipw_other_diarrhea")
+#   }
+# 
+#   # ------------------------------------------------------------
+#   # STEP 0: Create subsets of data for model fitting
+#   # ------------------------------------------------------------
+# 
+#   abx_levels <- levels(factor(data[[abx_var_name]]))
+#   abx_levels_new <- ifelse(is.na(abx_levels), NA, gsub("[ /]", "_", abx_levels))
+#   data[[abx_var_name]] <- factor(data[[abx_var_name]], levels = abx_levels, labels = abx_levels_new)
+# 
+#   inf_attr_idx <- which(data[[infection_var_name]] == 1)
+#   sub_inf_attr <- data[inf_attr_idx, ]
+# 
+#   subinfection_var_levels <- unique(sub_inf_attr[[subinfection_var_name]])
+#   subinfection_var_levels <- sort(subinfection_var_levels[!is.na(subinfection_var_levels)])
+# 
+#   if(length(subinfection_var_levels) != 2){
+#     stop("This function currently assumes exactly two non-missing subinfection levels among infected observations.")
+#   }
+# 
+#   I_Y_inf_attr <- ifelse(is.na(sub_inf_attr[[laz_var_name]]), 1, 0)
+#   Y_inf_attr <- sub_inf_attr[[laz_var_name]]
+#   attributes(Y_inf_attr) <- NULL
+# 
+#   covariates_inf_attr <- sub_inf_attr[, covariate_list, drop = FALSE]
+#   abx_inf_attr <- sub_inf_attr[, abx_var_name, drop = FALSE]
+#   subtype_inf_attr <- sub_inf_attr[, subinfection_var_name, drop = FALSE]
+# 
+#   sub_inf_attr_complete <- sub_inf_attr[!is.na(sub_inf_attr[[laz_var_name]]), ]
+# 
+#   Y_inf_attr_complete <- sub_inf_attr_complete[[laz_var_name]]
+#   attributes(Y_inf_attr_complete) <- NULL
+# 
+#   covariates_inf_attr_complete <- sub_inf_attr_complete[, covariate_list, drop = FALSE]
+#   abx_inf_attr_complete <- sub_inf_attr_complete[, abx_var_name, drop = FALSE]
+#   subtype_inf_attr_complete <- sub_inf_attr_complete[, subinfection_var_name, drop = FALSE]
+# 
+#   if(!is.null(no_etiology_var_name)){
+#     sub_no_attr <- data[which(data[[no_etiology_var_name]] == 1), ]
+#   } else{
+#     I_no_attr <- ifelse(
+#       data[[infection_var_name]] == 0 &
+#         rowSums(data[, pathogen_attributable_list, drop = FALSE], na.rm = TRUE) == 0,
+#       1, 0
+#     )
+#     data$no_etiology <- I_no_attr
+#     no_etiology_var_name <- "no_etiology"
+# 
+#     sub_no_attr <- data[which(data$no_etiology == 1), ]
+#   }
+# 
+#   I_Y_no_attr <- ifelse(is.na(sub_no_attr[[laz_var_name]]), 1, 0)
+#   Y_no_attr <- sub_no_attr[[laz_var_name]]
+#   attributes(Y_no_attr) <- NULL
+# 
+#   covariates_no_attr <- sub_no_attr[, covariate_list, drop = FALSE]
+#   abx_no_attr <- sub_no_attr[, abx_var_name, drop = FALSE]
+# 
+#   sub_no_attr_complete <- sub_no_attr[!is.na(sub_no_attr[[laz_var_name]]), ]
+# 
+#   Y_no_attr_complete <- sub_no_attr_complete[[laz_var_name]]
+#   attributes(Y_no_attr_complete) <- NULL
+# 
+#   covariates_no_attr_complete <- sub_no_attr_complete[, covariate_list, drop = FALSE]
+#   abx_no_attr_complete <- sub_no_attr_complete[, abx_var_name, drop = FALSE]
+# 
+#   # ------------------------------------------------------------
+#   # STEP 1: Fit & predict from outcome models
+#   # ------------------------------------------------------------
+# 
+#   outcome_model_1a <- SuperLearner::SuperLearner(
+#     Y = Y_inf_attr_complete,
+#     X = data.frame(
+#       abx_inf_attr_complete,
+#       covariates_inf_attr_complete,
+#       subtype_inf_attr_complete
+#     ),
+#     family = outcome_type,
+#     SL.library = sl.library.outcome,
+#     cvControl = list(V = v_folds)
+#   )
+# 
+#   outcome_model_1b <- SuperLearner::SuperLearner(
+#     Y = Y_no_attr_complete,
+#     X = data.frame(
+#       abx_no_attr_complete,
+#       covariates_no_attr_complete
+#     ),
+#     family = outcome_type,
+#     SL.library = sl.library.outcome,
+#     cvControl = list(V = v_folds)
+#   )
+# 
+#   abx_levels <- unique(data[[abx_var_name]])
+#   abx_levels <- abx_levels[!is.na(abx_levels)]
+# 
+#   list_outcome_vectors_1a <- vector("list", length = length(subinfection_var_levels))
+#   outcome_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+# 
+#   colnames(outcome_vectors_1b) <- paste0("abx_", abx_levels)
+# 
+#   for(s in seq_along(subinfection_var_levels)){
+# 
+#     subinfect_level <- subinfection_var_levels[s]
+# 
+#     list_outcome_vectors_1a[[s]] <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#     colnames(list_outcome_vectors_1a[[s]]) <- paste0("abx_", abx_levels)
+# 
+#     for(i in seq_along(abx_levels)){
+# 
+#       abx_level <- abx_levels[i]
+# 
+#       data_abx <- data
+#       data_abx[[abx_var_name]] <- abx_level
+# 
+#       pred_data <- data_abx[, c(abx_var_name, covariate_list), drop = FALSE]
+#       pred_data[[subinfection_var_name]] <- subinfect_level
+# 
+#       list_outcome_vectors_1a[[s]][, i] <- stats::predict(
+#         outcome_model_1a,
+#         newdata = pred_data,
+#         type = "response"
+#       )$pred
+#     }
+#   }
+# 
+#   for(i in seq_along(abx_levels)){
+# 
+#     abx_level <- abx_levels[i]
+# 
+#     data_abx <- data
+#     data_abx[[abx_var_name]] <- abx_level
+# 
+#     outcome_vectors_1b[, i] <- stats::predict(
+#       outcome_model_1b,
+#       newdata = data_abx[, c(abx_var_name, covariate_list), drop = FALSE],
+#       type = "response"
+#     )$pred
+#   }
+# 
+#   # ------------------------------------------------------------
+#   # STEP 2: Fit & predict from propensity models
+#   # ------------------------------------------------------------
+# 
+#   if(!any(is.na(followup_var_names))){
+#     covariate_list_no_followup <- covariate_list[!(covariate_list %in% followup_var_names)]
+#   } else{
+#     covariate_list_no_followup <- covariate_list
+#   }
+# 
+#   prop_vectors_1a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#   prop_vectors_1b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#   prop_vectors_2a <- data.frame(matrix(ncol = 2, nrow = nrow(data)))
+#   prop_vectors_2b <- data.frame(matrix(ncol = 2, nrow = nrow(data)))
+#   prop_vectors_3a <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#   prop_vectors_3b <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+# 
+#   colnames(prop_vectors_1a) <- paste0("abx_", abx_levels)
+#   colnames(prop_vectors_1b) <- paste0("abx_", abx_levels)
+#   colnames(prop_vectors_2a) <- c("inf_attr", "no_attr")
+#   colnames(prop_vectors_2b) <- c("subinf_1", "subinf_2")
+#   colnames(prop_vectors_3a) <- paste0("abx_", abx_levels)
+#   colnames(prop_vectors_3b) <- paste0("abx_", abx_levels)
+# 
+#   ###############################################
+#   ## Part 1: Propensity models for antibiotics ##
+#   ###############################################
+# 
+#   for(i in seq_along(abx_levels)){
+# 
+#     abx_level <- abx_levels[i]
+# 
+#     if(i != length(abx_levels)){
+# 
+#       if(i > 1){
+#         abx_levels_out <- abx_levels[1:(i - 1)]
+#         prop_sub_inf_attr <- sub_inf_attr[-which(sub_inf_attr[[abx_var_name]] %in% abx_levels_out), ]
+#         prop_sub_no_attr <- sub_no_attr[-which(sub_no_attr[[abx_var_name]] %in% abx_levels_out), ]
+#       } else{
+#         prop_sub_inf_attr <- sub_inf_attr
+#         prop_sub_no_attr <- sub_no_attr
+#       }
+# 
+#       prop_covariates_inf_attr <- prop_sub_inf_attr[, covariate_list, drop = FALSE]
+#       prop_subtype_inf_attr <- prop_sub_inf_attr[, subinfection_var_name, drop = FALSE]
+# 
+#       prop_covariates_no_attr <- prop_sub_no_attr[, covariate_list, drop = FALSE]
+# 
+#       prop_model_1a <- SuperLearner::SuperLearner(
+#         Y = as.numeric(prop_sub_inf_attr[[abx_var_name]] == abx_level),
+#         X = data.frame(
+#           prop_covariates_inf_attr,
+#           prop_subtype_inf_attr
+#         ),
+#         newX = data[, c(covariate_list, subinfection_var_name), drop = FALSE],
+#         family = stats::binomial(),
+#         SL.library = sl.library.treatment,
+#         cvControl = list(V = v_folds)
+#       )
+# 
+#       tmp_pred_a <- prop_model_1a$SL.pred
+# 
+#       prop_model_1b <- SuperLearner::SuperLearner(
+#         Y = as.numeric(prop_sub_no_attr[[abx_var_name]] == abx_level),
+#         X = data.frame(prop_covariates_no_attr),
+#         newX = data[, covariate_list, drop = FALSE],
+#         family = stats::binomial(),
+#         SL.library = sl.library.treatment,
+#         cvControl = list(V = v_folds)
+#       )
+# 
+#       tmp_pred_b <- prop_model_1b$SL.pred
+# 
+#       if(i == 1){
+#         prop_vectors_1a[, i] <- tmp_pred_a
+#         prop_vectors_1b[, i] <- tmp_pred_b
+#       } else{
+#         for(j in 1:(i - 1)){
+#           tmp_pred_a <- tmp_pred_a * (1 - prop_vectors_1a[, j])
+#           tmp_pred_b <- tmp_pred_b * (1 - prop_vectors_1b[, j])
+#         }
+#         prop_vectors_1a[, i] <- tmp_pred_a
+#         prop_vectors_1b[, i] <- tmp_pred_b
+#       }
+# 
+#     } else{
+#       prop_vectors_1a[, i] <- 1 - rowSums(prop_vectors_1a[, 1:(ncol(prop_vectors_1a) - 1), drop = FALSE])
+#       prop_vectors_1b[, i] <- 1 - rowSums(prop_vectors_1b[, 1:(ncol(prop_vectors_1b) - 1), drop = FALSE])
+#     }
+#   }
+# 
+#   ##########################################################
+#   ## Part 2: Propensity models for infection and subtype ##
+#   ##########################################################
+# 
+#   prop_model_2a_1 <- SuperLearner::SuperLearner(
+#     Y = data[[infection_var_name]],
+#     X = data[, covariate_list, drop = FALSE],
+#     family = stats::binomial(),
+#     SL.library = sl.library.infection,
+#     cvControl = list(V = v_folds)
+#   )
+# 
+#   prop_vectors_2a$inf_attr <- prop_model_2a_1$SL.pred
+# 
+#   prop_model_2b_1 <- SuperLearner::SuperLearner(
+#     Y = as.numeric(sub_inf_attr[[subinfection_var_name]] == subinfection_var_levels[1]),
+#     X = sub_inf_attr[, covariate_list, drop = FALSE],
+#     newX = data[, covariate_list, drop = FALSE],
+#     family = stats::binomial(),
+#     SL.library = sl.library.infection,
+#     cvControl = list(V = v_folds)
+#   )
+# 
+#   P_subinfect_is_level_1_given_attr <- prop_model_2b_1$SL.pred
+#   P_subinfect_is_level_1_and_attr <- P_subinfect_is_level_1_given_attr * prop_vectors_2a$inf_attr
+# 
+#   P_subinfect_is_level_2_given_attr <- 1 - P_subinfect_is_level_1_given_attr
+#   P_subinfect_is_level_2_and_attr <- P_subinfect_is_level_2_given_attr * prop_vectors_2a$inf_attr
+# 
+#   prop_vectors_2b$subinf_1 <- P_subinfect_is_level_1_and_attr
+#   prop_vectors_2b$subinf_2 <- P_subinfect_is_level_2_and_attr
+# 
+#   sub_no_shig <- data[which(data[[infection_var_name]] == 0), ]
+# 
+#   if(is.na(no_etiology_var_name)){
+#     sub_no_shig$no_etiology <- ifelse(
+#       rowSums(sub_no_shig[, pathogen_attributable_list, drop = FALSE], na.rm = TRUE) == 0,
+#       1, 0
+#     )
+#     no_etiology_var_name <- "no_etiology"
+#   }
+# 
+#   if(!all_other_diarrhea){
+# 
+#     prop_model_2a_2 <- SuperLearner::SuperLearner(
+#       Y = sub_no_shig[[no_etiology_var_name]],
+#       X = sub_no_shig[, covariate_list, drop = FALSE],
+#       newX = data[, covariate_list, drop = FALSE],
+#       family = stats::binomial(),
+#       SL.library = sl.library.infection,
+#       cvControl = list(V = v_folds)
+#     )
+# 
+#     prop_vectors_2a$no_attr <- prop_model_2a_2$SL.pred * (1 - prop_vectors_2a$inf_attr)
+# 
+#   } else{
+# 
+#     prop_model_2a_2 <- NULL
+#     prop_vectors_2a$no_attr <- 1 - prop_vectors_2a$inf_attr
+#   }
+# 
+#   ###############################################
+#   ## Part 3: Propensity models for missingness ##
+#   ###############################################
+# 
+#   prop_covariates_inf_attr <- covariates_inf_attr[
+#     , colnames(covariates_inf_attr) %in% covariate_list_no_followup,
+#     drop = FALSE
+#   ]
+# 
+#   prop_covariates_no_attr <- covariates_no_attr[
+#     , colnames(covariates_no_attr) %in% covariate_list_no_followup,
+#     drop = FALSE
+#   ]
+# 
+#   if(sum(I_Y_inf_attr) == 0){
+# 
+#     prop_model_3a <- list()
+#     class(prop_model_3a) <- "constant_zero_model"
+# 
+#     predict.constant_zero_model <- function(object, newdata, ...) {
+#       list(pred = rep(0, nrow(newdata)))
+#     }
+# 
+#   } else{
+# 
+#     prop_model_3a <- SuperLearner::SuperLearner(
+#       Y = I_Y_inf_attr,
+#       X = data.frame(
+#         abx_inf_attr,
+#         prop_covariates_inf_attr,
+#         subtype_inf_attr
+#       ),
+#       family = stats::binomial(),
+#       SL.library = sl.library.missingness,
+#       cvControl = list(V = v_folds)
+#     )
+#   }
+# 
+#   if(sum(I_Y_no_attr) == 0){
+# 
+#     prop_model_3b <- list()
+#     class(prop_model_3b) <- "constant_zero_model"
+# 
+#     predict.constant_zero_model <- function(object, newdata, ...) {
+#       list(pred = rep(0, nrow(newdata)))
+#     }
+# 
+#   } else{
+# 
+#     prop_model_3b <- SuperLearner::SuperLearner(
+#       Y = I_Y_no_attr,
+#       X = data.frame(
+#         abx_no_attr,
+#         prop_covariates_no_attr
+#       ),
+#       family = stats::binomial(),
+#       SL.library = sl.library.missingness,
+#       cvControl = list(V = v_folds)
+#     )
+#   }
+# 
+#   for(i in seq_along(abx_levels)){
+# 
+#     abx_level <- abx_levels[i]
+# 
+#     pred_data <- data
+#     pred_data[[abx_var_name]] <- abx_level
+# 
+#     prop_vectors_3a[, i] <- stats::predict(
+#       prop_model_3a,
+#       newdata = pred_data[, c(
+#         abx_var_name,
+#         covariate_list_no_followup,
+#         subinfection_var_name
+#       ), drop = FALSE],
+#       type = "response"
+#     )$pred
+# 
+#     prop_vectors_3b[, i] <- stats::predict(
+#       prop_model_3b,
+#       newdata = pred_data[, c(
+#         abx_var_name,
+#         covariate_list_no_followup
+#       ), drop = FALSE],
+#       type = "response"
+#     )$pred
+#   }
+# 
+#   # -------------------------------------------------
+#   # STEP 3: AIPW estimates and confidence intervals
+#   # -------------------------------------------------
+# 
+#   plug_ins_inf_subinfect1 <- colMeans(list_outcome_vectors_1a[[1]][inf_attr_idx, , drop = FALSE])
+#   plug_ins_inf_subinfect2 <- colMeans(list_outcome_vectors_1a[[2]][inf_attr_idx, , drop = FALSE])
+#   plug_ins_no_attr <- colMeans(outcome_vectors_1b[inf_attr_idx, , drop = FALSE])
+# 
+#   inf_subinfect1_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#   inf_subinfect2_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+#   no_attr_eifs <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(data)))
+# 
+#   colnames(inf_subinfect1_eifs) <- paste0("inf_subinfect1_eif_", abx_levels)
+#   colnames(inf_subinfect2_eifs) <- paste0("inf_subinfect2_eif_", abx_levels)
+#   colnames(no_attr_eifs) <- paste0("no_attr_eif_", abx_levels)
+# 
+#   if(!is.na(ps_trunc_level)){
+# 
+#     truncate_ps <- function(mat, ps_trunc_level){
+#       mat[mat < ps_trunc_level] <- ps_trunc_level
+#       mat[mat > 1 - ps_trunc_level] <- 1 - ps_trunc_level
+#       return(mat)
+#     }
+# 
+#     prop_vectors_1a <- truncate_ps(prop_vectors_1a, ps_trunc_level)
+#     prop_vectors_1b <- truncate_ps(prop_vectors_1b, ps_trunc_level)
+#     prop_vectors_2a <- truncate_ps(prop_vectors_2a, ps_trunc_level)
+#     prop_vectors_2b <- truncate_ps(prop_vectors_2b, ps_trunc_level)
+#     prop_vectors_3a <- truncate_ps(prop_vectors_3a, ps_trunc_level)
+#     prop_vectors_3b <- truncate_ps(prop_vectors_3b, ps_trunc_level)
+#   }
+# 
+#   I_Inf_1 <- data[[infection_var_name]]
+#   P_Inf_1 <- mean(prop_vectors_2a[, 1])
+#   P_Inf_1__Covariates <- prop_vectors_2a[, 1]
+# 
+#   I_Inf_subinfect1_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[1])
+#   I_Inf_subinfect2_1 <- as.numeric(data[[subinfection_var_name]] == subinfection_var_levels[2])
+# 
+#   P_Inf_subinfect1_1 <- prop_vectors_2b$subinf_1
+#   P_Inf_subinfect2_1 <- prop_vectors_2b$subinf_2
+# 
+#   I_Delta_0 <- as.numeric(!is.na(data[[laz_var_name]]))
+#   obs_outcome <- ifelse(is.na(data[[laz_var_name]]), 0, data[[laz_var_name]])
+# 
+#   for(i in seq_along(abx_levels)){
+# 
+#     abx_level <- abx_levels[i]
+# 
+#     I_Abx_a <- as.numeric(data[[abx_var_name]] == abx_level)
+#     P_Abx_a__Inf_1_Covariates <- prop_vectors_1a[, i]
+# 
+#     P_Delta_0__Inf_all <- 1 - prop_vectors_3a[, i]
+# 
+#     if(!is.null(first_id_var_name)){
+#       pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * length(unique(data[[first_id_var_name]]))
+#     } else{
+#       pseudo_n <- mean(P_Delta_0__Inf_all) * P_Inf_1 * nrow(data)
+#     }
+# 
+#     truncate_factor <- 5 / (sqrt(pseudo_n) * log(pseudo_n))
+# 
+#     full_propensity <- P_Abx_a__Inf_1_Covariates * P_Delta_0__Inf_all
+#     full_propensity[full_propensity < truncate_factor] <- truncate_factor
+# 
+#     P_Inf_subinfect1_tmp <- P_Inf_subinfect1_1
+#     P_Inf_subinfect2_tmp <- P_Inf_subinfect2_1
+# 
+#     P_Inf_subinfect1_tmp[P_Inf_subinfect1_tmp < truncate_factor] <- truncate_factor
+#     P_Inf_subinfect2_tmp[P_Inf_subinfect2_tmp < truncate_factor] <- truncate_factor
+# 
+#     Qbar_Inf_1_subinfect1_Abx_a_Covariates <- list_outcome_vectors_1a[[1]][, i]
+#     Qbar_Inf_1_subinfect2_Abx_a_Covariates <- list_outcome_vectors_1a[[2]][, i]
+# 
+#     eif_vec_inf_subinfect1 <-
+#       (I_Inf_subinfect1_1 / P_Inf_subinfect1_tmp) *
+#       (P_Inf_1__Covariates / P_Inf_1) *
+#       (I_Abx_a * I_Delta_0) / full_propensity *
+#       (obs_outcome - Qbar_Inf_1_subinfect1_Abx_a_Covariates) +
+#       (I_Inf_1 / P_Inf_1) *
+#       (Qbar_Inf_1_subinfect1_Abx_a_Covariates - plug_ins_inf_subinfect1[i])
+# 
+#     eif_vec_inf_subinfect2 <-
+#       (I_Inf_subinfect2_1 / P_Inf_subinfect2_tmp) *
+#       (P_Inf_1__Covariates / P_Inf_1) *
+#       (I_Abx_a * I_Delta_0) / full_propensity *
+#       (obs_outcome - Qbar_Inf_1_subinfect2_Abx_a_Covariates) +
+#       (I_Inf_1 / P_Inf_1) *
+#       (Qbar_Inf_1_subinfect2_Abx_a_Covariates - plug_ins_inf_subinfect2[i])
+# 
+#     if(is.na(no_etiology_var_name)){
+#       I_No_attr_1 <- data$no_etiology
+#     } else{
+#       I_No_attr_1 <- data[[no_etiology_var_name]]
+#     }
+# 
+#     P_No_attr__Covariates <- prop_vectors_2a[, 2]
+#     P_Abx_a__Covariates <- prop_vectors_1b[, i]
+#     P_Delta_0__No_attr_all <- 1 - prop_vectors_3b[, i]
+# 
+#     Qbar_No_attr_Abx_a_Covariates <- outcome_vectors_1b[, i]
+# 
+#     if(!is.null(first_id_var_name)){
+#       pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * length(unique(data[[first_id_var_name]]))
+#     } else{
+#       pseudo_n <- mean(P_Delta_0__No_attr_all) * P_Inf_1 * nrow(data)
+#     }
+# 
+#     truncate_factor <- 5 / (sqrt(pseudo_n) * log(pseudo_n))
+# 
+#     full_propensity <- P_Abx_a__Covariates * P_Delta_0__No_attr_all
+#     full_propensity[full_propensity < truncate_factor] <- truncate_factor
+# 
+#     P_No_attr_tmp <- P_No_attr__Covariates
+#     P_No_attr_tmp[P_No_attr_tmp < truncate_factor] <- truncate_factor
+# 
+#     eif_vec_no_attr <-
+#       (I_No_attr_1 / P_No_attr_tmp) *
+#       (P_Inf_1__Covariates / P_Inf_1) *
+#       (I_Abx_a * I_Delta_0) / full_propensity *
+#       (obs_outcome - Qbar_No_attr_Abx_a_Covariates) +
+#       (I_Inf_1 / P_Inf_1) *
+#       (Qbar_No_attr_Abx_a_Covariates - plug_ins_no_attr[i])
+# 
+#     inf_subinfect1_eifs[, i] <- eif_vec_inf_subinfect1
+#     inf_subinfect2_eifs[, i] <- eif_vec_inf_subinfect2
+#     no_attr_eifs[, i] <- eif_vec_no_attr
+#   }
+# 
+#   aipw_inf_subinfect1 <- plug_ins_inf_subinfect1 + colMeans(inf_subinfect1_eifs)
+#   aipw_inf_subinfect2 <- plug_ins_inf_subinfect2 + colMeans(inf_subinfect2_eifs)
+#   aipw_no_attr <- plug_ins_no_attr + colMeans(no_attr_eifs)
+# 
+#   eif_matrix <- cbind(inf_subinfect1_eifs, inf_subinfect2_eifs, no_attr_eifs)
+# 
+#   if(!is.null(first_id_var_name)){
+# 
+#     first_id_eif_matrix <- cbind(data.frame(first_id = data[[first_id_var_name]]), eif_matrix)
+#     first_id_eif_matrix <- aggregate(. ~ first_id, data = first_id_eif_matrix, FUN = sum)
+# 
+#     colnames(first_id_eif_matrix)[-1] <- colnames(eif_matrix)
+# 
+#     eif_first_ids <- first_id_eif_matrix[, 1]
+# 
+#     scaled_matrix <- first_id_eif_matrix[, -1, drop = FALSE] *
+#       (nrow(first_id_eif_matrix) / nrow(eif_matrix))
+# 
+#   } else{
+# 
+#     eif_first_ids <- NULL
+#     scaled_matrix <- eif_matrix
+#   }
+# 
+#   aipws_effect_subinfect1 <- vector("numeric", length = length(abx_levels))
+#   aipws_effect_subinfect2 <- vector("numeric", length = length(abx_levels))
+# 
+#   eifs_effect_subinfect1 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
+#   eifs_effect_subinfect2 <- data.frame(matrix(ncol = length(abx_levels), nrow = nrow(scaled_matrix)))
+# 
+#   names(aipws_effect_subinfect1) <- paste0("effect_", abx_levels)
+#   names(aipws_effect_subinfect2) <- paste0("effect_", abx_levels)
+# 
+#   colnames(eifs_effect_subinfect1) <- paste0("effect_subinfect1_", abx_levels)
+#   colnames(eifs_effect_subinfect2) <- paste0("effect_subinfect2_", abx_levels)
+# 
+#   for(i in seq_along(abx_levels)){
+# 
+#     aipws_effect_subinfect1[i] <- aipw_inf_subinfect1[i] - aipw_no_attr[i]
+#     aipws_effect_subinfect2[i] <- aipw_inf_subinfect2[i] - aipw_no_attr[i]
+# 
+#     idx_1_subinfect1 <- i
+#     idx_1_subinfect2 <- length(abx_levels) + i
+#     idx_2 <- 2 * length(abx_levels) + i
+# 
+#     gradient_subinfect1 <- rep(0, 3 * length(abx_levels))
+#     gradient_subinfect1[idx_1_subinfect1] <- 1
+#     gradient_subinfect1[idx_2] <- -1
+#     gradient_subinfect1 <- matrix(gradient_subinfect1, ncol = 1)
+# 
+#     gradient_subinfect2 <- rep(0, 3 * length(abx_levels))
+#     gradient_subinfect2[idx_1_subinfect2] <- 1
+#     gradient_subinfect2[idx_2] <- -1
+#     gradient_subinfect2 <- matrix(gradient_subinfect2, ncol = 1)
+# 
+#     eif_effect_subinfect1 <- as.numeric(as.matrix(scaled_matrix) %*% gradient_subinfect1)
+#     eifs_effect_subinfect1[, i] <- eif_effect_subinfect1
+# 
+#     eif_effect_subinfect2 <- as.numeric(as.matrix(scaled_matrix) %*% gradient_subinfect2)
+#     eifs_effect_subinfect2[, i] <- eif_effect_subinfect2
+#   }
+# 
+#   results_df <- data.frame(
+#     abx_levels = abx_levels,
+#     abx_level_inf_subinfect1_1 = aipw_inf_subinfect1,
+#     abx_level_inf_subinfect2_1 = aipw_inf_subinfect2,
+#     abx_level_inf_0 = aipw_no_attr,
+#     effect_inf_subinfect1_abx_level = aipws_effect_subinfect1,
+#     effect_inf_subinfect2_abx_level = aipws_effect_subinfect2
+#   )
+# 
+#   eif_matrix_scaled <- cbind(
+#     scaled_matrix,
+#     eifs_effect_subinfect1,
+#     eifs_effect_subinfect2
+#   )
+# 
+#   cov_matrix <- stats::cov(eif_matrix_scaled)
+#   eif_hat <- sqrt(diag(cov_matrix) / nrow(eif_matrix_scaled))
+# 
+#   results_object <- list(
+#     results_df = results_df,
+#     plug_ins_inf_subinfect1 = plug_ins_inf_subinfect1,
+#     plug_ins_inf_subinfect2 = plug_ins_inf_subinfect2,
+#     plug_ins_no_attr = plug_ins_no_attr,
+#     eif_matrix = eif_matrix_scaled,
+#     eif_first_ids = eif_first_ids,
+#     se = eif_hat
+#   )
+# 
+#   class(results_object) <- "aipw_other_diarrhea"
+# 
+#   return(list(
+#     results_object = results_object,
+#     aipw_models = NULL
+#   ))
+# }
