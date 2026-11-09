@@ -387,6 +387,8 @@ combine_res <- function(res_list) {
 #' @import fastDummies
 #' 
 #' @returns dataset with factors one-hot encoded
+#' 
+#' @export
 one_hot_encode <- function(data, 
                            laz_var_name,
                            abx_var_name,

@@ -9,6 +9,8 @@ agaipw(
   laz_var_name,
   abx_var_name,
   infection_var_name = NA,
+  subinfection_var_name = NA,
+  complete_subinfection = TRUE,
   case_var_name = NA,
   site_var_name = NA,
   followup_var_names = NA,
@@ -38,7 +40,8 @@ agaipw(
   ps_trunc_level = 0.01,
   parsimonious_propensity = TRUE,
   all_other_diarrhea = FALSE,
-  adjust_pathogen_case_control = FALSE
+  adjust_pathogen_case_control = FALSE,
+  subinfection_analysis = FALSE
 )
 }
 \arguments{
