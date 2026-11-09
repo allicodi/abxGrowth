@@ -169,6 +169,18 @@ aipw_other_diarrhea <- function(data,
     
     outcome_vectors_1b[, i] <- stats::predict(outcome_model_1b, newdata = data_abx[, c(abx_var_name,
                                                                                        covariate_list)], type = "response")$pred
+    
+    ## Add truncation for extrapolation of predictions 
+    #  (encountering rare issue with spline extrapolation in prediction data)
+    above_max_obs_1a <- outcome_vectors_1a[,i] > max(Y_inf_attr_complete)
+    below_min_obs_1a <- outcome_vectors_1a[,i] < min(Y_inf_attr_complete)
+    outcome_vectors_1a[above_max_obs_1a,i] <- max(Y_inf_attr_complete)
+    outcome_vectors_1a[below_min_obs_1a,i] <- min(Y_inf_attr_complete)
+    
+    above_max_obs_1b <- outcome_vectors_1b[,i] > max(Y_no_attr_complete)
+    below_min_obs_1b <- outcome_vectors_1b[,i] < min(Y_no_attr_complete)
+    outcome_vectors_1b[above_max_obs_1b,i] <- max(Y_no_attr_complete)
+    outcome_vectors_1b[below_min_obs_1b,i] <- min(Y_no_attr_complete)
   }
   
   if(msm){
@@ -1411,7 +1423,8 @@ aipw_other_diarrhea_2 <- function(data,
     
     aipw_msm[[i]] <- list(
       coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
-      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]])
+      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]]),
+      inf_fns = scaled_matrix_msm_list[[i]]
     )
     
   }
@@ -1451,6 +1464,14 @@ aipw_other_diarrhea_2 <- function(data,
   class(results_object) <- "aipw_other_diarrhea_2"
   
   if(return_models){
+    
+    # Add propensity vectors to output for overlap diagnostic
+    prop_vector_list <- data.frame(prop_vectors_1a = prop_vectors_1a,
+                                   prop_vectors_1b = prop_vectors_1b,
+                                   prop_vectors_2a = prop_vectors_2a,
+                                   prop_vectors_3a = prop_vectors_3a,
+                                   prop_vectors_3b = prop_vectors_3b)
+    
     # Make list of models
     if(msm){
       aipw_models <- list(outcome_model_1a = outcome_model_1a,
@@ -1462,7 +1483,8 @@ aipw_other_diarrhea_2 <- function(data,
                           prop_model_2a_2 = prop_model_2a_2,
                           prop_model_3a = prop_model_3a,
                           prop_model_3b = prop_model_3b,
-                          msm_model_list = msm_model_list)
+                          msm_model_list = msm_model_list,
+                          prop_vector_list = prop_vector_list)
     } else{
       aipw_models <- list(outcome_model_1a = outcome_model_1a,
                           outcome_model_1b = outcome_model_1b,
@@ -1472,7 +1494,8 @@ aipw_other_diarrhea_2 <- function(data,
                           prop_model_2a_1 = prop_model_2a_1,
                           prop_model_2a_2 = prop_model_2a_2,
                           prop_model_3a = prop_model_3a,
-                          prop_model_3b = prop_model_3b)
+                          prop_model_3b = prop_model_3b,
+                          prop_vector_list = prop_vector_list)
     }
     
     return(list(results_object = results_object,
@@ -2025,7 +2048,8 @@ aipw_case_control <- function(data,
 
     aipw_msm[[i]] <- list(
       coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
-      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]])
+      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]]),
+      inf_fns = scaled_matrix_msm_list[[i]]
     )
     
   }
@@ -2061,6 +2085,13 @@ aipw_case_control <- function(data,
   class(results_object) <- "aipw_case_control"
   
   if(return_models){
+    
+    # Add propensity vectors to output for overlap diagnostic
+    prop_vector_list <- data.frame(prop_vectors_1a = prop_vectors_1a,
+                                   prop_vectors_2a = prop_vectors_2a,
+                                   prop_vectors_3a = prop_vectors_3a,
+                                   prop_vectors_3b = prop_vectors_3b)
+    
     # Make list of models
     if(msm){
       aipw_models <- list(outcome_model_1a = outcome_model_1a,
@@ -2069,14 +2100,16 @@ aipw_case_control <- function(data,
                           prop_model_2a = prop_model_2a,
                           prop_model_3a = prop_model_3a,
                           prop_model_3b = prop_model_3b,
-                          msm_model_list = msm_model_list)
+                          msm_model_list = msm_model_list,
+                          prop_vector_list = prop_vector_list)
     } else{
       aipw_models <- list(outcome_model_1a = outcome_model_1a,
                           outcome_model_1b = outcome_model_1b,
                           prop_model_1a_list = prop_model_1a_list,
                           prop_model_2a = prop_model_2a,
                           prop_model_3a = prop_model_3a,
-                          prop_model_3b = prop_model_3b)
+                          prop_model_3b = prop_model_3b,
+                          prop_vector_list = prop_vector_list)
     }
     return(list(results_object = results_object,
                 aipw_models = aipw_models))
@@ -2652,7 +2685,8 @@ aipw_case_control_2 <- function(data,
     
     aipw_msm[[i]] <- list(
       coefficients = coef(msm_model_list[[i]]) + colMeans(scaled_matrix_msm_list[[i]]),
-      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]])
+      cov = stats::cov(scaled_matrix_msm_list[[i]]) / nrow(scaled_matrix_msm_list[[i]]),
+      inf_fns = scaled_matrix_msm_list[[i]]
     )
     
   }
